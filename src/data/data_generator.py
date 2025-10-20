@@ -44,7 +44,7 @@ class DataGenerator:
 
     def __init__(
         self,
-        symbols_dict: dict[int, str],
+        symbols_dict: dict[str, int],
         n_trials: int,
         n_letters: int,
         n_ch: int,
@@ -100,8 +100,7 @@ class DataGenerator:
         return self.dataset_simul, self.targets
 
     def imshow(self) -> None:
-        """Визуализирует сгенерированные данные в виде изображения.
-        """
+        """Визуализирует сгенерированные данные в виде изображения."""
         plt.imshow(
             abs(np.concatenate(self.dataset_simul, axis=1)[:, 10000:12000]),
             aspect="auto",

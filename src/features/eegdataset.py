@@ -1,4 +1,3 @@
-
 import numpy as np
 import torch
 from sklearn.preprocessing import LabelEncoder
@@ -73,15 +72,14 @@ class EEGDataset(Dataset):
             - label: тензор метки класса формы (1,)
 
         """
+        self.current_idx = idx
         signal = self.data[idx]
-
         signal = self.normalize_channel_wise(signal)
 
         if self.augment and torch.rand(1) > 0.5:
             signal = self.augment_signal(signal)
 
         signal = torch.FloatTensor(signal)
-
         label = torch.LongTensor([self.encoded_labels[idx]])
 
         return signal, label
@@ -103,16 +101,25 @@ class EEGDataset(Dataset):
         normalized = np.zeros_like(signal)
         for channel in range(signal.shape[0]):
             channel_data = signal[channel]
-            mean = np.mean(channel_data)
-            std = np.std(channel_data)
-            if std > 0:
-                normalized[channel] = (channel_data - mean) / std
+
+            median = np.median(channel_data)
+            mad = np.median(np.abs(channel_data - median))
+
+            if mad > 0:
+                normalized[channel] = (channel_data - median) / (mad * 1.4826)
             else:
-                normalized[channel] = channel_data - mean
+                std = np.std(channel_data)
+                if std > 0:
+                    normalized[channel] = (
+                        channel_data - np.mean(channel_data)
+                    ) / std
+                else:
+                    normalized[channel] = channel_data - np.mean(channel_data)
+
         return normalized
 
     def augment_signal(self, signal: np.ndarray) -> np.ndarray:
-        """Применяет аугментацию к EEG сигналу.
+        """Улучшенная аугментация для ЭЭГ сигналов.
 
         Parameters
         ----------
@@ -124,20 +131,92 @@ class EEGDataset(Dataset):
         np.ndarray
             Аугментированный сигнал формы (n_channels, seq_length)
 
+        Notes
+        -----
+        Все аугментации имитируют реальные артефакты ЭЭГ:
+
+        Движения глаз (low-frequency noise)
+        Плохой контакт электродов (channel dropout)
+        Изменения импеданса (amplitude scaling)
+        Мышечные артефакты (adaptive noise)
+
+
+        CHANNEL_NEUROANATOMY = {
+            'FZ': 'префронтальная кора - исполнительные функции, внимание',
+            'CZ': 'моторная кора - сенсомоторная интеграция',
+            'P3': 'левая теменная кора - пространственная обработка',
+            'PZ': 'центральная теменная кора - сенсорная интеграция',
+            'P4': 'правая теменная кора - пространственная обработка',
+            'PO7': 'левая затылочно-теменная область - зрительная обработка',
+            'PO8': 'правая затылочно-теменная область - зрительная обработка',
+            'OZ': 'первичная зрительная кора - базовая зрительная обработка'
+        }
+
         """
         augmented = signal.copy()
-        # Добавим гауссовский шум
+
         if torch.rand(1) > 0.5:
-            noise_factor = 0.01
+            signal_std = np.std(signal)
+            noise_factor = np.random.uniform(0.02, 0.08) * signal_std
             noise = np.random.normal(0, noise_factor, signal.shape)
             augmented += noise
-        # Случайное масштабирование амплитуды
+
         if torch.rand(1) > 0.5:
-            scale_factor = np.random.uniform(0.8, 1.2)
-            augmented *= scale_factor
-        # Случайный сдвиш по времени
+            for channel in range(augmented.shape[0]):
+                channel_scale = np.random.uniform(0.7, 1.5)
+                augmented[channel] *= channel_scale
+
+        if torch.rand(1) > 0.3:
+            lf_noise = np.random.normal(0, 0.05, signal.shape[1])
+            for channel in range(augmented.shape[0]):
+                if torch.rand(1) > 0.7:
+                    augmented[channel] += lf_noise
+
+        if torch.rand(1) > 0.8:
+            n_channels_to_drop = np.random.randint(
+                1, max(2, signal.shape[0] // 4)
+            )
+            channels_to_drop = np.random.choice(
+                signal.shape[0], n_channels_to_drop, replace=False
+            )
+            for channel in channels_to_drop:
+                noise_level = np.std(augmented[channel]) * 2
+                augmented[channel] = np.random.normal(
+                    0, noise_level, signal.shape[1]
+                )
+
         if torch.rand(1) > 0.5:
-            shift = np.random.randint(-10, 10)
-            augmented = np.roll(augmented, shift, axis=1)
+            time_warp_factor = np.random.uniform(0.9, 1.1)
+            original_length = signal.shape[1]
+            new_length = int(original_length * time_warp_factor)
+
+            from scipy.interpolate import interp1d
+
+            x_original = np.linspace(0, 1, original_length)
+            x_new = np.linspace(0, 1, new_length)
+
+            for channel in range(augmented.shape[0]):
+                interpolator = interp1d(
+                    x_original,
+                    augmented[channel],
+                    kind="linear",
+                    fill_value="extrapolate",
+                )
+                warped = interpolator(x_new)
+
+                if new_length > original_length:
+                    augmented[channel] = warped[:original_length]
+                else:
+                    padded = np.zeros(original_length)
+                    padded[:new_length] = warped
+                    augmented[channel] = padded
+
+        if torch.rand(1) > 0.7:
+            phase_shift = np.random.uniform(-0.2, 0.2)
+            fft_signal = np.fft.fft(augmented, axis=1)
+            frequencies = np.fft.fftfreq(signal.shape[1])
+            phase_shifter = np.exp(1j * 2 * np.pi * phase_shift * frequencies)
+            fft_signal *= phase_shifter
+            augmented = np.real(np.fft.ifft(fft_signal, axis=1))
 
         return augmented

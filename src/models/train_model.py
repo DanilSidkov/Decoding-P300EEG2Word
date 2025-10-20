@@ -1,47 +1,86 @@
-import numpy as np
 import torch
-from sklearn.preprocessing import LabelEncoder
 from torch import nn, optim
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 
+class NeuroInformedEarlyStopping:
+    """Ранняя остановка с учетом метрик BCI"""
 
-class EarlyStopping:
-    """Реализация ранней остановки для прекращения обучения при отсутствии улучшений.
-
-    Parameters
-    ----------
-    patience : int, optional
-        Количество эпох без улучшения перед остановкой, по умолчанию 10
-    delta : float, optional
-        Минимальное изменение для считать улучшением, по умолчанию 0
-
-    """
-
-    def __init__(self, patience: int = 10, delta: float = 0) -> None:
+    def __init__(self, patience=5, min_epochs=5):
         self.patience = patience
-        self.delta = delta
-        self.best_score: float | None = None
-        self.epochs_no_improve: int = 0
-        self.early_stop: bool = False
+        self.min_epochs = min_epochs
+        self.best_f1 = 0
+        self.epochs_no_improve = 0
+        self.early_stop = False
 
-    def __call__(self, val_loss: float) -> None:
-        """Обновляет состояние ранней остановки на основе валидационной ошибки.
-
-        Parameters
-        ----------
-        val_loss : float
-            Валидационная ошибка текущей эпохи
-
-        """
-        if self.best_score is None:
-            self.best_score = val_loss
-        elif val_loss > self.best_score - self.delta:
-            self.epochs_no_improve += 1
-            if self.epochs_no_improve >= self.patience:
-                self.early_stop = True
-        else:
-            self.best_score = val_loss
+    def __call__(self, current_f1, epoch, train_loss, val_loss):
+        if current_f1 > self.best_f1:
+            self.best_f1 = current_f1
             self.epochs_no_improve = 0
+        else:
+            self.epochs_no_improve += 1
+            
+        if epoch < self.min_epochs:
+            return
+            
+        if self.epochs_no_improve >= self.patience:
+            self.early_stop = True
+            print(f"Early stopping triggered. Best F1: {self.best_f1:.4f}")
+
+class FocalLoss(nn.Module):
+    def __init__(self, weight=None, gamma=2.0, reduction='mean'):
+        super(FocalLoss, self).__init__()
+        self.weight = weight
+        self.gamma = gamma
+        self.reduction = reduction
+
+    def forward(self, inputs, targets):
+        ce_loss = F.cross_entropy(inputs, targets, weight=self.weight, reduction='none')
+        pt = torch.exp(-ce_loss)
+        focal_loss = ((1 - pt) ** self.gamma) * ce_loss
+        
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        else:
+            return focal_loss
+
+def calculate_neuro_metrics(all_predictions, all_labels):
+    """Специализированные метрики для BCI классификации"""
+    from sklearn.metrics import (
+        accuracy_score,
+        confusion_matrix,
+        precision_recall_fscore_support,
+        roc_auc_score,
+        balanced_accuracy_score
+    )
+
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        all_labels, all_predictions, average=None, labels=[0, 1]
+    )
+
+    try:
+        auc = roc_auc_score(all_labels, all_predictions)
+    except:
+        auc = 0.0
+
+    cm = confusion_matrix(all_labels, all_predictions)
+
+    return {
+        "accuracy": balanced_accuracy_score(all_labels, all_predictions),
+        "precision_nontarget": precision[0],
+        "precision_target": precision[1],
+        "recall_nontarget": recall[0],
+        "recall_target": recall[1],
+        "f1_nontarget": f1[0],
+        "f1_target": f1[1],
+        "auc_roc": auc,
+        "confusion_matrix": cm,
+        "specificity": cm[0, 0] / (cm[0, 0] + cm[0, 1])
+        if (cm[0, 0] + cm[0, 1]) > 0
+        else 0,
+    }
 
 
 def train_model(
@@ -49,6 +88,8 @@ def train_model(
     train_loader: DataLoader,
     val_loader: DataLoader,
     num_epochs: int = 200,
+    target_class_weight: float = 5.0,
+    update_plot_every: int = 1,
 ) -> tuple[list[float], list[float], list[float]]:
     """Обучает модель на предоставленных данных.
 
@@ -72,80 +113,173 @@ def train_model(
         - val_accuracies: точность на валидации по эпохам
 
     """
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, patience=5, factor=0.5
-    )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    early_stopping = EarlyStopping(patience=15)
+    model = model.to(device)
+    
+    class_weights = torch.tensor([1.0, target_class_weight]).to(device)
+    
+    criterion_ce = nn.CrossEntropyLoss(weight=class_weights)
+    criterion_focal = FocalLoss(weight=class_weights, gamma=2.0)
+    
+    optimizer = optim.AdamW(
+        model.parameters(), 
+        lr=0.001, 
+        weight_decay=1e-4,
+        betas=(0.9, 0.999)
+    )
+    
+    best_f1 = 0.0
+    best_model_state = None
+    
+    accumulation_steps = 4
+    steps_per_epoch = (len(train_loader) + accumulation_steps - 1) // accumulation_steps
+    if len(train_loader) % accumulation_steps != 0:
+        steps_per_epoch += 1
 
-    train_losses: list[float] = []
-    val_losses: list[float] = []
-    val_accuracies: list[float] = []
+    total_steps = steps_per_epoch * num_epochs
+
+    scheduler = optim.lr_scheduler.OneCycleLR(
+        optimizer,
+        max_lr=0.01,
+        total_steps=total_steps,
+        pct_start=0.1,
+        div_factor=10.0,
+        final_div_factor=100.0
+    )
+    
+    history = {
+        "epoch": [],
+        "train_loss": [],
+        "val_loss": [],
+        "val_accuracy": [],
+        "val_f1_target": [],
+        "val_precision_target": [],
+        "val_recall_target": [],
+        "learning_rate": [],
+        "ROC_AUC": [],
+        "specificity": [],
+        "train_accuracy": [],
+        "grad_norm": [],
+    }
+
+    early_stopping = NeuroInformedEarlyStopping(patience=5, min_epochs=10)
 
     for epoch in range(num_epochs):
-        # Тренировка
         model.train()
         train_loss = 0.0
+        train_correct = 0
+        train_total = 0
+        optimizer.zero_grad()
 
-        for signals, labels in train_loader:
-            signals = signals.to(device)
-            labels = labels.squeeze().to(device)
+        for i, (signals, labels) in enumerate(train_loader):
+            signals, labels = signals.to(device), labels.squeeze().to(device)
 
-            optimizer.zero_grad()
             outputs = model(signals)
-            loss = criterion(outputs, labels)
+            
+            loss_ce = criterion_ce(outputs, labels)
+            loss_focal = criterion_focal(outputs, labels)
+            loss = 0.7 * loss_ce + 0.3 * loss_focal
+            
+            loss = loss / accumulation_steps
             loss.backward()
+
+            _, preds = torch.max(outputs, 1)
+            train_correct += (preds == labels).sum().item()
+            train_total += labels.size(0)
+
+            if (i + 1) % accumulation_steps == 0:
+                total_norm = torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), 
+                    max_norm=1.0,
+                    error_if_nonfinite=True
+                )
+                
+                optimizer.step()
+                optimizer.zero_grad()
+                scheduler.step()
+                
+            train_loss += loss.item() * accumulation_steps
+
+        if len(train_loader) % accumulation_steps != 0:
+            total_norm = torch.nn.utils.clip_grad_norm_(
+                model.parameters(), 
+                max_norm=1.0
+            )
             optimizer.step()
+            optimizer.zero_grad()
+            scheduler.step()
 
-            train_loss += loss.item()
-
-        # Валидация
         model.eval()
         val_loss = 0.0
-        correct = 0
-        total = 0
+        all_preds, all_labels = [], []
 
         with torch.no_grad():
             for signals, labels in val_loader:
-                signals = signals.to(device)
-                labels = labels.squeeze().to(device)
-
+                signals, labels = signals.to(device), labels.squeeze().to(device)
                 outputs = model(signals)
-                loss = criterion(outputs, labels)
-                val_loss += loss.item()
+                
+                val_loss_ce = criterion_ce(outputs, labels)
+                val_loss_focal = criterion_focal(outputs, labels)
+                val_loss_combined = 0.7 * val_loss_ce + 0.3 * val_loss_focal
+                val_loss += val_loss_combined.item()
 
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
+                _, preds = torch.max(outputs, 1)
+                all_preds.extend(preds.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
 
-        # Статистика эпохи
-        train_loss /= len(train_loader)
-        val_loss /= len(val_loader)
-        val_accuracy = 100 * correct / total
+        metrics = calculate_neuro_metrics(all_preds, all_labels)
+        train_accuracy = train_correct / train_total if train_total > 0 else 0.0
 
-        train_losses.append(train_loss)
-        val_losses.append(val_loss)
-        val_accuracies.append(val_accuracy)
+        avg_train_loss = train_loss / len(train_loader)
+        avg_val_loss = val_loss / len(val_loader)
 
-        # Планировщик обучения и ранняя остановка
-        scheduler.step(val_loss)
-        early_stopping(val_loss)
+        current_f1 = metrics["f1_target"]
+        if current_f1 > best_f1:
+            best_f1 = current_f1
+            best_model_state = {
+                'epoch': epoch,
+                'model_state_dict': model.state_dict().copy(),
+                'optimizer_state_dict': optimizer.state_dict().copy(),
+                'f1': best_f1,
+                'metrics': metrics.copy()
+            }
 
-        if (epoch + 1) % 10 == 0:
-            print(f"Epoch [{epoch + 1}/{num_epochs}]")
-            print(f"Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
-            print(f"Val Accuracy: {val_accuracy:.2f}%")
-            print(f"LR: {optimizer.param_groups[0]['lr']:.6f}")
-            print("---")
+        history["epoch"].append(epoch + 1)
+        history["train_loss"].append(avg_train_loss)
+        history["val_loss"].append(avg_val_loss)
+        history["val_accuracy"].append(metrics["accuracy"])
+        history["val_f1_target"].append(current_f1)
+        history["val_precision_target"].append(metrics["precision_target"])
+        history["val_recall_target"].append(metrics["recall_target"])
+        history["learning_rate"].append(optimizer.param_groups[0]["lr"])
+        history["ROC_AUC"].append(metrics["auc_roc"])
+        history["specificity"].append(metrics["specificity"])
+        history["train_accuracy"].append(train_accuracy)
+        history["grad_norm"].append(total_norm.item() if 'total_norm' in locals() else 0.0)
 
+        if (epoch + 1) % update_plot_every == 0:
+            print(f"\nEpoch {epoch+1}/{num_epochs}")
+            print(f"Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
+            print(f"Train Acc: {train_accuracy:.4f} | Val Acc: {metrics['accuracy']:.4f}")
+            print(f"Target F1: {current_f1:.4f} | Precision: {metrics['precision_target']:.4f} | Recall: {metrics['recall_target']:.4f}")
+            print(f"ROC AUC: {metrics['auc_roc']:.4f} | Specificity: {metrics['specificity']:.4f}")
+            print(f"LR: {optimizer.param_groups[0]['lr']:.2e} | Grad Norm: {history['grad_norm'][-1]:.4f}")
+            print(f"Best F1: {best_f1:.4f}")
+            print("-" * 60)
+
+        early_stopping(current_f1, epoch, train_loss, val_loss)
         if early_stopping.early_stop:
-            print(f"Early stopping at epoch {epoch + 1}")
+            print(f"Early stopping at epoch {epoch+1}")
             break
 
-    return train_losses, val_losses, val_accuracies
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state['model_state_dict'])
+        print(f"\nLoaded best model from epoch {best_model_state['epoch'] + 1} with F1: {best_f1:.4f}")
 
+    history["best_f1"] = best_f1
+    history["best_epoch"] = best_model_state['epoch'] if best_model_state else epoch
+    
+    return history
 
 def test_model(
     model: nn.Module, test_loader: DataLoader
@@ -168,6 +302,13 @@ def test_model(
         - accuracy: точность классификации в процентах
 
     """
+    from sklearn.metrics import (
+        accuracy_score,
+        confusion_matrix,
+        precision_recall_fscore_support,
+        roc_auc_score,
+        balanced_accuracy_score
+    )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
     correct = 0
@@ -190,56 +331,8 @@ def test_model(
             all_labels.extend(labels.cpu().numpy())
 
     accuracy = 100 * correct / total
+    bac = balanced_accuracy_score(all_labels, all_predictions)
     print(f"Test Accuracy: {accuracy:.2f}%")
+    print(f"Test BAccuracy: {bac}%")
 
     return all_predictions, all_labels, accuracy
-
-
-def predict_letter(
-    model: nn.Module, signal: np.ndarray, label_encoder: LabelEncoder
-) -> tuple[str, float]:
-    """Предсказывает класс для одного EEG сигнала.
-
-    Parameters
-    ----------
-    model : torch.nn.Module
-        Обученная модель для предсказания
-    signal : np.ndarray
-        Входной EEG сигнал формы (channels, seq_length)
-    label_encoder : sklearn.preprocessing.LabelEncoder
-        Кодировщик меток для преобразования индексов в буквы
-
-    Returns
-    -------
-    Tuple[str, float]
-        Кортеж содержащий:
-        - predicted_letter: предсказанная буква
-        - confidence: уверность предсказания
-
-    """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.eval()
-    with torch.no_grad():
-        # Нормализация
-        signal_normalized = np.zeros_like(signal)
-        for channel in range(signal.shape[0]):
-            channel_data = signal[channel]
-            mean = np.mean(channel_data)
-            std = np.std(channel_data)
-            if std > 0:
-                signal_normalized[channel] = (channel_data - mean) / std
-            else:
-                signal_normalized[channel] = channel_data - mean
-
-        signal_tensor = (
-            torch.FloatTensor(signal_normalized).unsqueeze(0).to(device)
-        )
-        output = model(signal_tensor)
-        probabilities = torch.softmax(output, dim=1)
-        confidence, predicted_idx = torch.max(probabilities, 1)
-
-        predicted_letter = label_encoder.inverse_transform(
-            [predicted_idx.item()]
-        )[0]
-
-        return predicted_letter, confidence.item()
