@@ -3,6 +3,9 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 
+
+
+
 class NeuroInformedEarlyStopping:
     """Ранняя остановка с учетом метрик BCI"""
 
@@ -58,7 +61,7 @@ def calculate_neuro_metrics(all_predictions, all_labels):
 
     precision, recall, f1, _ = precision_recall_fscore_support(
         all_labels, all_predictions, average=None, labels=[0, 1]
-    )
+    ) #, zero_division=0
 
     try:
         auc = roc_auc_score(all_labels, all_predictions)
@@ -119,7 +122,7 @@ def train_model(
     class_weights = torch.tensor([1.0, target_class_weight]).to(device)
     
     criterion_ce = nn.CrossEntropyLoss(weight=class_weights)
-    criterion_focal = FocalLoss(weight=class_weights, gamma=2.0)
+    #criterion_focal = FocalLoss(weight=class_weights, gamma=2.0)
     
     optimizer = optim.AdamW(
         model.parameters(), 
@@ -177,8 +180,8 @@ def train_model(
             outputs = model(signals)
             
             loss_ce = criterion_ce(outputs, labels)
-            loss_focal = criterion_focal(outputs, labels)
-            loss = 0.7 * loss_ce + 0.3 * loss_focal
+            #loss_focal = criterion_focal(outputs, labels)
+            loss = 1 * loss_ce #loss = 0.7 * loss_ce + 0.3 * loss_focal
             
             loss = loss / accumulation_steps
             loss.backward()
@@ -219,8 +222,8 @@ def train_model(
                 outputs = model(signals)
                 
                 val_loss_ce = criterion_ce(outputs, labels)
-                val_loss_focal = criterion_focal(outputs, labels)
-                val_loss_combined = 0.7 * val_loss_ce + 0.3 * val_loss_focal
+                #val_loss_focal = criterion_focal(outputs, labels)
+                val_loss_combined = 1 * val_loss_ce #val_loss_combined = 0.7 * val_loss_ce + 0.3 * val_loss_focal
                 val_loss += val_loss_combined.item()
 
                 _, preds = torch.max(outputs, 1)
