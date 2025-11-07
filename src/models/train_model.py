@@ -278,7 +278,6 @@ def train_model(
         history["learning_rate"].append(optimizer.param_groups[0]["lr"])
         history["ROC_AUC"].append(metrics["auc_roc"])
         history["specificity"].append(metrics["specificity"])
-        history["train_accuracy"].append(train_accuracy)
         history["grad_norm"].append(total_norm.item() if 'total_norm' in locals() else 0.0)
 
         if (epoch + 1) % update_plot_every == 0:
@@ -357,6 +356,6 @@ def test_model(
     accuracy = 100 * correct / total
     bac = 100 * balanced_accuracy_score(all_labels, all_predictions)
     print(f"Test Accuracy: {accuracy:.2f}%")
-    print(f"Test BAccuracy: {bac:.2f%}")
+    print(f"Test BAccuracy: {bac:.2f}%")
 
     return all_predictions, all_labels, bac
