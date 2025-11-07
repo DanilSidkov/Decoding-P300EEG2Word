@@ -7,15 +7,29 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, ConcatDataset
 
 def compute_dataset_stats(dataset):
-    """Вычисляет mean и std по тренировочным данным для нормализации"""
-    data_loader = DataLoader(dataset, batch_size=len(dataset))
-    all_data, all_labels = next(iter(data_loader))
+    n = 0
+    mean = 0.0
+    M2 = 0.0
     
-    # Вычисляем статистики и преобразуем в Python float
-    mean_val = all_data.mean().item()
-    std_val = all_data.std().item()
+    batch_size = min(len(dataset), 1024)
+    data_loader = DataLoader(dataset, batch_size=batch_size, num_workers=2)
     
-    return mean_val, std_val
+    for batch, _ in data_loader:
+        # Объединяем все измерения кроме батча
+        batch = batch.flatten(1) if batch.dim() > 2 else batch
+        batch_np = batch.numpy() if torch.is_tensor(batch) else batch
+        batch_flat = batch_np.reshape(-1)
+        
+        batch_size = len(batch_flat)
+        delta = batch_flat - mean
+        mean += delta.sum() / (n + batch_size)
+        M2 += (delta * (batch_flat - mean)).sum()
+        n += batch_size
+    
+    variance = M2 / n if n > 1 else 0.0
+    std = np.sqrt(max(variance, 1e-8))
+    
+    return mean, std
 
 class EEGDataset(Dataset):
     """Dataset для EEG сигналов с поддержкой аугментации.
@@ -59,8 +73,8 @@ class EEGDataset(Dataset):
         self.encoded_labels = self.label_encoder.fit_transform(self.labels)
 
         self.augment = augment
-        self.mean = mean
-        self.std = std
+        self.mean = float(mean) if mean is not None else None
+        self.std = float(std) if std is not None else None
 
     @property
     def targets(self):
@@ -80,100 +94,112 @@ class EEGDataset(Dataset):
 
     def normalize_signal(self, signal):
         """Стандартная нормализация"""
-        if self.mean is not None and self.std is not None:
-            # Преобразуем torch tensor в numpy если нужно
-            if torch.is_tensor(signal):
-                signal_np = signal.numpy()
-            else:
-                signal_np = signal
-                
-            # Преобразуем статистики в numpy если они torch tensor
-            if torch.is_tensor(self.mean):
-                mean_val = self.mean.item()
-                std_val = self.std.item()
-            else:
-                mean_val = self.mean
-                std_val = self.std
-                
-            normalized = (signal_np - mean_val) / (std_val + 1e-8)
-            return normalized
-        return signal
+        if self.mean is None:
+            return signal
+            
+        if torch.is_tensor(signal):
+            signal_np = signal.numpy()
+        else:
+            signal_np = signal
+            
+        mean_val = self.mean.item() if torch.is_tensor(self.mean) else self.mean
+        std_val = self.std.item() if torch.is_tensor(self.std) else self.std
+            
+        epsilon = 1e-6 if std_val > 1e-5 else 1e-3
+        
+        normalized = (signal_np - mean_val) / (std_val + epsilon)
+        normalized = np.clip(normalized, -10, 10)
+        
+        if torch.is_tensor(signal):
+            return torch.from_numpy(normalized)
+        return normalized
     
     def __getitem__(self, idx):
-        signal = self.data[idx]
+        signal = self.data[idx].copy()
         signal = self.normalize_signal(signal)
         
-        if self.augment and torch.rand(1) > 0.5:
-            signal = self.augment_signal(signal)
+        if self.augment:
+            rng = np.random.RandomState(seed=idx + int(torch.utils.data.get_worker_info().id if torch.utils.data.get_worker_info() else 0))
+            if rng.rand() > 0.5:
+                signal = self.augment_signal(signal, rng=rng)
             
-        signal = torch.FloatTensor(signal)
-        label = torch.LongTensor([self.encoded_labels[idx]])
-        return signal, label
+        return torch.from_numpy(signal).float(), torch.tensor(self.encoded_labels[idx], dtype=torch.long)
 
-    """
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        Получает элемент по индексу.
-
-        Parameters
-        ----------
-        idx : int
-            Индекс элемента
-
-        Returns
-        -------
-        Tuple[torch.Tensor, torch.Tensor]
-            Кортеж содержащий:
-            - signal: тензор EEG сигнала формы (n_channels, seq_length)
-            - label: тензор метки класса формы (1,)
-
+    def _time_warp(self, signal, max_warp=0.05, rng=None):
+        """Более корректный time warping через ресемплинг"""
+        from scipy.signal import resample
         
-        self.current_idx = idx
-        signal = self.data[idx]
-        signal = self.normalize_channel_wise(signal)
-
-        if self.augment and torch.rand(1) > 0.5:
-            signal = self.augment_signal(signal)
-
-        signal = torch.FloatTensor(signal)
-        label = torch.LongTensor([self.encoded_labels[idx]])
-
-        return signal, label
-    """
-    def normalize_channel_wise(self, signal: np.ndarray) -> np.ndarray:
-        """Нормализует EEG сигнал по каждому каналу отдельно.
-
-        Parameters
-        ----------
-        signal : np.ndarray
-            Входной сигнал формы (n_channels, seq_length)
-
-        Returns
-        -------
-        np.ndarray
-            Нормализованный сигнал формы (n_channels, seq_length)
-
-        """
-        normalized = np.zeros_like(signal)
-        for channel in range(signal.shape[0]):
-            channel_data = signal[channel]
-
-            median = np.median(channel_data)
-            mad = np.median(np.abs(channel_data - median))
-
-            if mad > 0:
-                normalized[channel] = (channel_data - median) / (mad * 1.4826)
+        if rng is None:
+            rng = np.random
+        warp_factor = rng.uniform(1-max_warp, 1+max_warp)
+        new_length = int(signal.shape[1] * warp_factor)
+        
+        warped = np.zeros_like(signal)
+        for ch in range(signal.shape[0]):
+            resampled = resample(signal[ch], new_length)
+            if new_length >= signal.shape[1]:
+                warped[ch] = resampled[:signal.shape[1]]
             else:
-                std = np.std(channel_data)
-                if std > 0:
-                    normalized[channel] = (
-                        channel_data - np.mean(channel_data)
-                    ) / std
-                else:
-                    normalized[channel] = channel_data - np.mean(channel_data)
+                warped[ch, :new_length] = resampled
+        return warped
 
-        return normalized
+    def _phase_shift(self, signal, max_shift=0.1, rng=None):
+        """Частотно-зависимый фазовый сдвиг"""
+        if rng is None:
+            rng = np.random
+            
+        fft_signal = np.fft.rfft(signal, axis=1)
+        frequencies = np.fft.rfftfreq(signal.shape[1])
+        
+        phase_shift = rng.uniform(-max_shift, max_shift)
+        freq_dependent_shift = phase_shift * np.exp(-frequencies * 10)
+        
+        phase_shifter = np.exp(1j * 2 * np.pi * freq_dependent_shift)
+        fft_signal *= phase_shifter
+        
+        return np.fft.irfft(fft_signal, n=signal.shape[1], axis=1)
+        
+    def _amplitude_scale(self, signal, rng=None):
+        """Коррелированное масштабирование соседних каналов"""
+        n_channels = signal.shape[0]
+        
+        base_scale = rng.uniform(0.8, 1.2)
+        channel_scales = base_scale + rng.normal(0, 0.1, n_channels)
+        channel_scales = np.clip(channel_scales, 0.7, 1.5)
+        
+        from scipy.ndimage import gaussian_filter1d
+        channel_scales = gaussian_filter1d(channel_scales, sigma=1.0)
+        
+        return signal * channel_scales[:, np.newaxis]
 
-    def augment_signal(self, signal: np.ndarray) -> np.ndarray:
+    def _add_noise(self, signal, rng=None):
+        signal_std = np.std(signal)
+        noise_factor = rng.uniform(0.02, 0.08) * signal_std
+        noise = rng.normal(0, noise_factor, signal.shape)
+        return signal + noise
+
+    def _low_freq_noise(self, signal, rng=None):
+        lf_noise = rng.normal(0, 0.05, signal.shape[1])
+        for channel in range(signal.shape[0]):
+            if torch.rand(1) > 0.7:
+                signal[channel] += lf_noise
+        return signal
+
+    def _channel_dropout(self, signal, rng=None):
+        n_channels_to_drop = rng.randint(
+            1, max(2, signal.shape[0] // 4)
+        )
+        channels_to_drop = rng.choice(
+            signal.shape[0], n_channels_to_drop, replace=False
+        )
+        for channel in channels_to_drop:
+            noise_level = np.std(signal[channel]) * 2
+            signal[channel] = rng.normal(
+                0, noise_level, signal.shape[1]
+            )
+        return signal
+    
+    def augment_signal(self, signal: np.ndarray, rng: np.random.RandomState) -> np.ndarray:
         """Улучшенная аугментация для ЭЭГ сигналов.
 
         Parameters
@@ -198,72 +224,20 @@ class EEGDataset(Dataset):
         """
         augmented = signal.copy()
 
-        if torch.rand(1) > 0.5:
-            signal_std = np.std(signal)
-            noise_factor = np.random.uniform(0.02, 0.08) * signal_std
-            noise = np.random.normal(0, noise_factor, signal.shape)
-            augmented += noise
+        aug_pipeline = [
+            (rng.rand() > 0.5, lambda x: self._add_noise(x, rng=rng)),
+            (rng.rand() > 0.5, lambda x: self._amplitude_scale(x, rng=rng)),
+            (rng.rand() > 0.3, lambda x: self._low_freq_noise(x, rng=rng)),
+            (rng.rand() > 0.8, lambda x: self._channel_dropout(x, rng=rng)),
+            (rng.rand() > 0.5, lambda x: self._time_warp(x, rng=rng)),
+            (rng.rand() > 0.7, lambda x: self._phase_shift(x, rng=rng)),
+        ]
 
-        if torch.rand(1) > 0.5:
-            for channel in range(augmented.shape[0]):
-                channel_scale = np.random.uniform(0.7, 1.5)
-                augmented[channel] *= channel_scale
-
-        if torch.rand(1) > 0.3:
-            lf_noise = np.random.normal(0, 0.05, signal.shape[1])
-            for channel in range(augmented.shape[0]):
-                if torch.rand(1) > 0.7:
-                    augmented[channel] += lf_noise
-
-        if torch.rand(1) > 0.8:
-            n_channels_to_drop = np.random.randint(
-                1, max(2, signal.shape[0] // 4)
-            )
-            channels_to_drop = np.random.choice(
-                signal.shape[0], n_channels_to_drop, replace=False
-            )
-            for channel in channels_to_drop:
-                noise_level = np.std(augmented[channel]) * 2
-                augmented[channel] = np.random.normal(
-                    0, noise_level, signal.shape[1]
-                )
-
-        if torch.rand(1) > 0.5:
-            time_warp_factor = np.random.uniform(0.9, 1.1)
-            original_length = signal.shape[1]
-            new_length = int(original_length * time_warp_factor)
-
-            from scipy.interpolate import interp1d
-
-            x_original = np.linspace(0, 1, original_length)
-            x_new = np.linspace(0, 1, new_length)
-
-            for channel in range(augmented.shape[0]):
-                interpolator = interp1d(
-                    x_original,
-                    augmented[channel],
-                    kind="linear",
-                    fill_value="extrapolate",
-                )
-                warped = interpolator(x_new)
-
-                if new_length > original_length:
-                    augmented[channel] = warped[:original_length]
-                else:
-                    padded = np.zeros(original_length)
-                    padded[:new_length] = warped
-                    augmented[channel] = padded
-
-        if torch.rand(1) > 0.7:
-            phase_shift = np.random.uniform(-0.2, 0.2)
-            fft_signal = np.fft.fft(augmented, axis=1)
-            frequencies = np.fft.fftfreq(signal.shape[1])
-            phase_shifter = np.exp(1j * 2 * np.pi * phase_shift * frequencies)
-            fft_signal *= phase_shifter
-            augmented = np.real(np.fft.ifft(fft_signal, axis=1))
-
+        for should_apply, aug_func in aug_pipeline:
+            if should_apply:
+                augmented = aug_func(augmented)
+        
         return augmented
-
 
 def load_and_prepare_data(file_paths, test_subject=None):
     """Загружает и подготавливает данные всех субъектов

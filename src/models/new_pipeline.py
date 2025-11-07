@@ -3,15 +3,14 @@ from models.smote import select_optimal_time_window, apply_time_window, apply_sm
 from models.eegnet1d import OptimizedEEGNet1D_v2
 from models.train_model import train_model, test_model
 from torch.utils.data import DataLoader, ConcatDataset
+import numpy as np
 
 def improved_pipeline(datapath, test_subject=8):
     """Улучшенный пайплайн обучения с учетом всех рекомендаций"""
     
     try:
-        # Загрузка данных
         train_dataset, val_dataset, test_dataset, LE = load_and_prepare_data(datapath, test_subject=test_subject)
-        
-        # Вычисляем статистики для нормализации
+
         train_mean, train_std = compute_dataset_stats(train_dataset)
         print(f"Статистики нормализации: mean={train_mean:.4f}, std={train_std:.4f}")
         
@@ -37,13 +36,20 @@ def improved_pipeline(datapath, test_subject=8):
         test_dataset = apply_time_window(test_dataset, start_idx, end_idx)
         
         # Балансировка классов с Borderline-SMOTE
-        print("Применение Borderline-SMOTE...")
-        train_dataset = apply_smote_balancing(train_dataset)
+        #print("Применение Borderline-SMOTE...")
+        #train_dataset = apply_smote_balancing(train_dataset)
         
         # Создаем DataLoader'ы
         train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
         test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+        
+        # Получаем все метки из тренировочного датасета
+        train_labels = train_loader.dataset.encoded_labels
+        
+        # Автоматически определяем все присутствующие классы
+        unique_classes = np.unique(train_labels)
+        print(f"Найдены классы в тренировочных данных: {unique_classes}")
         
         # Создаем модель с оптимизированными параметрами
         seq_length = end_idx - start_idx
@@ -69,8 +75,7 @@ def improved_pipeline(datapath, test_subject=8):
         print("Тестирование модели...")
         predictions, true_labels, test_accuracy = test_model(model, test_loader)
 
-
-        shuffle_labels_test(model, train_loader, val_loader)
+        #shuffle_labels_test(model, train_loader, val_loader)
         
         print(f"Финальная точность на тесте: {test_accuracy:.2f}%")
         

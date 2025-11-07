@@ -39,7 +39,7 @@ class FocalLoss(nn.Module):
 
     def forward(self, inputs, targets):
         ce_loss = F.cross_entropy(inputs, targets, weight=self.weight, reduction='none')
-        pt = torch.exp(-ce_loss)
+        pt = torch.softmax(inputs, dim=1)[range(len(targets)), targets]
         focal_loss = ((1 - pt) ** self.gamma) * ce_loss
         
         if self.reduction == 'mean':
@@ -60,7 +60,7 @@ def calculate_neuro_metrics(all_predictions, all_labels):
     )
 
     precision, recall, f1, _ = precision_recall_fscore_support(
-        all_labels, all_predictions, average=None, labels=[0, 1]
+        all_labels, all_predictions, average=None, labels=[0, 1], zero_division=0
     ) #, zero_division=0
 
     try:
@@ -118,16 +118,38 @@ def train_model(
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
+    import numpy as np
+    from sklearn.utils.class_weight import compute_class_weight
     
-    class_weights = torch.tensor([1.0, target_class_weight]).to(device)
+    # Получаем все метки из тренировочного датасета
+    train_labels = train_loader.dataset.encoded_labels
+    
+    # Автоматически определяем все присутствующие классы
+    unique_classes = np.unique(train_labels)
+    print(f"Найдены классы в тренировочных данных: {unique_classes}")
+    
+    # Вычисляем веса только для присутствующих классов
+    if len(unique_classes) > 0:
+        class_weights_array = compute_class_weight(
+            'balanced',
+            classes=unique_classes,
+            y=train_labels
+        )
+        class_weights = torch.tensor(class_weights_array, dtype=torch.float32).to(device)
+        print(f"Вычисленные веса классов: {class_weights}")
+    else:
+        # Fallback если нет данных
+        class_weights = torch.tensor([1.0, 1.0]).to(device)
+        print("Предупреждение: используем веса по умолчанию") 
+
     
     criterion_ce = nn.CrossEntropyLoss(weight=class_weights)
-    #criterion_focal = FocalLoss(weight=class_weights, gamma=2.0)
+    criterion_focal = FocalLoss(weight=class_weights, gamma=2.0)
     
     optimizer = optim.AdamW(
         model.parameters(), 
         lr=0.001, 
-        weight_decay=1e-4,
+        weight_decay=1e-5,
         betas=(0.9, 0.999)
     )
     
@@ -135,7 +157,7 @@ def train_model(
     best_model_state = None
     
     accumulation_steps = 4
-    steps_per_epoch = (len(train_loader) + accumulation_steps - 1) // accumulation_steps
+    steps_per_epoch = len(train_loader) // accumulation_steps
     if len(train_loader) % accumulation_steps != 0:
         steps_per_epoch += 1
 
@@ -165,7 +187,7 @@ def train_model(
         "grad_norm": [],
     }
 
-    early_stopping = NeuroInformedEarlyStopping(patience=5, min_epochs=10)
+    early_stopping = NeuroInformedEarlyStopping(patience=10, min_epochs=15)
 
     for epoch in range(num_epochs):
         model.train()
@@ -180,8 +202,8 @@ def train_model(
             outputs = model(signals)
             
             loss_ce = criterion_ce(outputs, labels)
-            #loss_focal = criterion_focal(outputs, labels)
-            loss = 1 * loss_ce #loss = 0.7 * loss_ce + 0.3 * loss_focal
+            loss_focal = criterion_focal(outputs, labels)
+            loss = 0.7 * loss_ce + 0.3 * loss_focal
             
             loss = loss / accumulation_steps
             loss.backward()
@@ -222,8 +244,8 @@ def train_model(
                 outputs = model(signals)
                 
                 val_loss_ce = criterion_ce(outputs, labels)
-                #val_loss_focal = criterion_focal(outputs, labels)
-                val_loss_combined = 1 * val_loss_ce #val_loss_combined = 0.7 * val_loss_ce + 0.3 * val_loss_focal
+                val_loss_focal = criterion_focal(outputs, labels)
+                val_loss_combined = 0.7 * val_loss_ce + 0.3 * val_loss_focal
                 val_loss += val_loss_combined.item()
 
                 _, preds = torch.max(outputs, 1)
@@ -231,7 +253,6 @@ def train_model(
                 all_labels.extend(labels.cpu().numpy())
 
         metrics = calculate_neuro_metrics(all_preds, all_labels)
-        train_accuracy = train_correct / train_total if train_total > 0 else 0.0
 
         avg_train_loss = train_loss / len(train_loader)
         avg_val_loss = val_loss / len(val_loader)
@@ -241,10 +262,10 @@ def train_model(
             best_f1 = current_f1
             best_model_state = {
                 'epoch': epoch,
-                'model_state_dict': model.state_dict().copy(),
-                'optimizer_state_dict': optimizer.state_dict().copy(),
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
                 'f1': best_f1,
-                'metrics': metrics.copy()
+                'metrics': metrics
             }
 
         history["epoch"].append(epoch + 1)
@@ -263,7 +284,7 @@ def train_model(
         if (epoch + 1) % update_plot_every == 0:
             print(f"\nEpoch {epoch+1}/{num_epochs}")
             print(f"Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
-            print(f"Train Acc: {train_accuracy:.4f} | Val Acc: {metrics['accuracy']:.4f}")
+            print(f"Val Acc: {metrics['accuracy']:.4f}")
             print(f"Target F1: {current_f1:.4f} | Precision: {metrics['precision_target']:.4f} | Recall: {metrics['recall_target']:.4f}")
             print(f"ROC AUC: {metrics['auc_roc']:.4f} | Specificity: {metrics['specificity']:.4f}")
             print(f"LR: {optimizer.param_groups[0]['lr']:.2e} | Grad Norm: {history['grad_norm'][-1]:.4f}")
@@ -334,8 +355,8 @@ def test_model(
             all_labels.extend(labels.cpu().numpy())
 
     accuracy = 100 * correct / total
-    bac = balanced_accuracy_score(all_labels, all_predictions)
+    bac = 100 * balanced_accuracy_score(all_labels, all_predictions)
     print(f"Test Accuracy: {accuracy:.2f}%")
-    print(f"Test BAccuracy: {bac}%")
+    print(f"Test BAccuracy: {bac:.2f%}")
 
-    return all_predictions, all_labels, accuracy
+    return all_predictions, all_labels, bac
