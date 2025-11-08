@@ -5,7 +5,7 @@
 groups = ["default", "ness-dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:a283cae7829f6fef332efcc41d58934e97b898530a54577d628ebaeb2d4b1bcf"
+content_hash = "sha256:beae274c13b6ee4cec8cfcc44ee3d4afa6069591bf8f22af5d57776abc09715e"
 
 [[metadata.targets]]
 requires_python = "==3.10.4"
@@ -558,6 +558,37 @@ groups = ["default"]
 files = [
     {file = "idna-3.11-py3-none-any.whl", hash = "sha256:771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea"},
     {file = "idna-3.11.tar.gz", hash = "sha256:795dafcc9c04ed0c1fb032c2aa73654d8e8c5023a7df64a53f39190ada629902"},
+]
+
+[[package]]
+name = "imbalanced-learn"
+version = "0.14.0"
+requires_python = ">=3.10"
+summary = "Toolbox for imbalanced dataset in machine learning"
+groups = ["default"]
+dependencies = [
+    "joblib<2,>=1.2.0",
+    "numpy<3,>=1.25.2",
+    "scikit-learn<2,>=1.4.2",
+    "scipy<2,>=1.11.4",
+    "threadpoolctl<4,>=2.0.0",
+]
+files = [
+    {file = "imbalanced_learn-0.14.0-py3-none-any.whl", hash = "sha256:8a8700c02ca185e113064815513f990fbf84eb4e7701f1d4e944ce67fb259a60"},
+    {file = "imbalanced_learn-0.14.0.tar.gz", hash = "sha256:22b9ba6dbd681a9ec613cd6e08c21d39639fb5ccbf2a3c991f9c36415b70522c"},
+]
+
+[[package]]
+name = "imblearn"
+version = "0.0"
+summary = "Toolbox for imbalanced dataset in machine learning."
+groups = ["default"]
+dependencies = [
+    "imbalanced-learn",
+]
+files = [
+    {file = "imblearn-0.0-py2.py3-none-any.whl", hash = "sha256:d42c2d709d22c00d2b9a91e638d57240a8b79b4014122d92181fcd2549a2f79a"},
+    {file = "imblearn-0.0.tar.gz", hash = "sha256:d8fbb662919c1b16f438ad91a8256220e53bcf6815c9ad5502c518b798de34f2"},
 ]
 
 [[package]]
