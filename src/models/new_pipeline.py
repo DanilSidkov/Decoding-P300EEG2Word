@@ -8,8 +8,9 @@ import numpy as np
 from models.autoencoder import EEGAutoencoder, AutoencoderClassifier, train_autoencoder, visualize_embeddings
 from models.csp import CSP, find_optimal_csp_components, plot_csp_patterns
 from models.csp_smote import apply_smote_to_eeg_csp
+from models.vision_transformer import EEGVisionTransformer, EnhancedEEGViT
 
-def improved_pipeline(datapath, test_subject=8, method='csp', use_autoencoder=False, use_smote='auto'):
+def improved_pipeline(datapath, test_subject=8, method=None, use_autoencoder=False, use_smote='auto', model_type='vit'):
     """Улучшенный пайплайн обучения с учетом всех рекомендаций"""
     
     try:
@@ -138,20 +139,56 @@ def improved_pipeline(datapath, test_subject=8, method='csp', use_autoencoder=Fa
                 
                 # Создаем комбинированную модель
                 model = AutoencoderClassifier(autoencoder, num_classes=2)
+                print_model_parameters(autoencoder, 'AutoEncoder')
+                print_model_parameters(model, 'AutoEncoderClassifier')
     
             else:
-                seq_length = end_idx - start_idx
-                model = DeepConvNet(
-                    input_channels=8,
-                    seq_length=seq_length,
-                    num_classes=2
-                )
-                #model = OptimizedEEGNet1D_v2(
-                #    input_channels=8,
-                #    seq_length=seq_length,
-                ##    num_classes=2
-                #)
-            
+                # Выбор модели
+                if model_type == 'vit':
+                    print("Использование Vision Transformer для классификации EEG...")
+                    seq_length = end_idx - start_idx
+                    model = EEGVisionTransformer(
+                        input_channels=8,
+                        seq_length=seq_length,
+                        patch_size=16,  # Можно настроить
+                        embed_dim=128,
+                        depth=4,
+                        num_heads=4,
+                        num_classes=2
+                    )
+                    print_model_parameters(model, 'vit')
+                elif model_type == 'enhanced_vit':
+                    print("Использование улучшенного ViT с канальным вниманием...")
+                    seq_length = end_idx - start_idx
+                    model = EnhancedEEGViT(
+                        input_channels=8,
+                        seq_length=seq_length,
+                        patch_size=16,
+                        embed_dim=128,
+                        depth=4,
+                        num_heads=4,
+                        num_classes=2
+                    )
+                    print_model_parameters(model, 'enhanced_vit')
+                elif model_type == 'deepconvnet':
+                    print("Использование DeepConvNet...")
+                    seq_length = end_idx - start_idx
+                    model = DeepConvNet(
+                        input_channels=8,
+                        seq_length=seq_length,
+                        num_classes=2
+                    )
+                    print_model_parameters(model, 'DeepConvNet')
+                elif model_type == 'eeg':
+                    print("Использование EEGNet...")
+                    seq_length = end_idx - start_idx
+                    model = OptimizedEEGNet1D_v2(
+                        input_channels=8,
+                        seq_length=seq_length,
+                        num_classes=2
+                    )
+                    print_model_parameters(model, 'EEGNet')
+                
             # Балансировка классов с Borderline-SMOTE
             #print("Применение Borderline-SMOTE...")
             #train_dataset = apply_smote_balancing(train_dataset)
@@ -169,9 +206,6 @@ def improved_pipeline(datapath, test_subject=8, method='csp', use_autoencoder=Fa
             print(f"Найдены классы в тренировочных данных: {unique_classes}")
             print(f"Длина последовательности после обрезки: {seq_length}")
     
-    
-            print_model_parameters(autoencoder, 'AutoEncoder')
-            print_model_parameters(model, 'AutoEncoderClassifier')
             # Обучение с оптимизированными параметрами
             print("Начало обучения...")
             history = train_model(
