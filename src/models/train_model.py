@@ -4,7 +4,21 @@ from torch.utils.data import DataLoader
 import torch.nn.functional as F
 
 
-
+def print_model_parameters(model, model_name="Model"):
+    """
+    Красиво выводит информацию о параметрах модели
+    """
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    
+    print(f"=== Параметры модели {model_name} ===")
+    print(f"Всего параметров: {total_params:,}")
+    print(f"Обучаемых параметров: {trainable_params:,}")
+    print(f"Необучаемых параметров: {total_params - trainable_params:,}")
+    print(f"Размер модели: {total_params * 4 / (1024**2):.2f} MB (float32)")
+    print("=" * 40)
+    
+    return total_params, trainable_params
 
 class NeuroInformedEarlyStopping:
     """Ранняя остановка с учетом метрик BCI"""
@@ -12,13 +26,13 @@ class NeuroInformedEarlyStopping:
     def __init__(self, patience=5, min_epochs=5):
         self.patience = patience
         self.min_epochs = min_epochs
-        self.best_f1 = 0
+        self.best_ac = 10000
         self.epochs_no_improve = 0
         self.early_stop = False
 
-    def __call__(self, current_f1, epoch, train_loss, val_loss):
-        if current_f1 > self.best_f1:
-            self.best_f1 = current_f1
+    def __call__(self, current_ac, epoch, train_loss, val_loss):
+        if train_loss < self.best_ac:
+            self.best_ac = train_loss
             self.epochs_no_improve = 0
         else:
             self.epochs_no_improve += 1
@@ -28,7 +42,7 @@ class NeuroInformedEarlyStopping:
             
         if self.epochs_no_improve >= self.patience:
             self.early_stop = True
-            print(f"Early stopping triggered. Best F1: {self.best_f1:.4f}")
+            print(f"Early stopping triggered.")
 
 class FocalLoss(nn.Module):
     def __init__(self, weight=None, gamma=2.0, reduction='mean'):
@@ -149,11 +163,12 @@ def train_model(
     optimizer = optim.AdamW(
         model.parameters(), 
         lr=0.001, 
-        weight_decay=1e-5,
-        betas=(0.9, 0.999)
+        weight_decay=0.01,
+        betas=(0.9, 0.999),
+        eps=1e-8
     )
     
-    best_f1 = 0.0
+    best_ac = 0.0
     best_model_state = None
     
     accumulation_steps = 4
@@ -165,11 +180,11 @@ def train_model(
 
     scheduler = optim.lr_scheduler.OneCycleLR(
         optimizer,
-        max_lr=0.01,
+        max_lr=0.001,
         total_steps=total_steps,
-        pct_start=0.1,
-        div_factor=10.0,
-        final_div_factor=100.0
+        pct_start=0.2,
+        div_factor=5.0,
+        final_div_factor=50.0
     )
     
     history = {
@@ -178,8 +193,11 @@ def train_model(
         "val_loss": [],
         "val_accuracy": [],
         "val_f1_target": [],
+        "val_f1_nontarget": [],
         "val_precision_target": [],
+        "val_precision_nontarget": [],
         "val_recall_target": [],
+        "val_recall_nontarget": [],
         "learning_rate": [],
         "ROC_AUC": [],
         "specificity": [],
@@ -257,14 +275,14 @@ def train_model(
         avg_train_loss = train_loss / len(train_loader)
         avg_val_loss = val_loss / len(val_loader)
 
-        current_f1 = metrics["f1_target"]
-        if current_f1 > best_f1:
-            best_f1 = current_f1
+        current_ac = metrics["accuracy"]
+        if current_ac > best_ac:
+            best_ac = current_ac
             best_model_state = {
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'f1': best_f1,
+                'balanced_accuracy': best_ac,
                 'metrics': metrics
             }
 
@@ -272,9 +290,12 @@ def train_model(
         history["train_loss"].append(avg_train_loss)
         history["val_loss"].append(avg_val_loss)
         history["val_accuracy"].append(metrics["accuracy"])
-        history["val_f1_target"].append(current_f1)
+        history["val_f1_target"].append(metrics["f1_target"])
+        history["val_f1_nontarget"].append(metrics["f1_nontarget"])
         history["val_precision_target"].append(metrics["precision_target"])
+        history["val_precision_nontarget"].append(metrics["precision_nontarget"])
         history["val_recall_target"].append(metrics["recall_target"])
+        history["val_recall_nontarget"].append(metrics["recall_nontarget"])
         history["learning_rate"].append(optimizer.param_groups[0]["lr"])
         history["ROC_AUC"].append(metrics["auc_roc"])
         history["specificity"].append(metrics["specificity"])
@@ -284,22 +305,23 @@ def train_model(
             print(f"\nEpoch {epoch+1}/{num_epochs}")
             print(f"Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
             print(f"Val Acc: {metrics['accuracy']:.4f}")
-            print(f"Target F1: {current_f1:.4f} | Precision: {metrics['precision_target']:.4f} | Recall: {metrics['recall_target']:.4f}")
+            print(f"Target F1: {metrics['f1_target']:.4f} | Precision: {metrics['precision_target']:.4f} | Recall: {metrics['recall_target']:.4f}")
+            print(f"NonTarget F1: {metrics['f1_nontarget']:.4f} | Precision: {metrics['precision_nontarget']:.4f} | Recall: {metrics['recall_nontarget']:.4f}")
             print(f"ROC AUC: {metrics['auc_roc']:.4f} | Specificity: {metrics['specificity']:.4f}")
             print(f"LR: {optimizer.param_groups[0]['lr']:.2e} | Grad Norm: {history['grad_norm'][-1]:.4f}")
-            print(f"Best F1: {best_f1:.4f}")
+            print(f"Best Balanced Accuracy: {best_ac:.4f}")
             print("-" * 60)
 
-        early_stopping(current_f1, epoch, train_loss, val_loss)
+        early_stopping(current_ac, epoch, train_loss, val_loss)
         if early_stopping.early_stop:
             print(f"Early stopping at epoch {epoch+1}")
             break
 
     if best_model_state is not None:
         model.load_state_dict(best_model_state['model_state_dict'])
-        print(f"\nLoaded best model from epoch {best_model_state['epoch'] + 1} with F1: {best_f1:.4f}")
+        print(f"\nLoaded best model from epoch {best_model_state['epoch'] + 1} with Balanced Accuracy: {best_ac:.4f}")
 
-    history["best_f1"] = best_f1
+    history["best_ac"] = best_ac
     history["best_epoch"] = best_model_state['epoch'] if best_model_state else epoch
     
     return history

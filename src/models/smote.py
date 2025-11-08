@@ -121,6 +121,26 @@ def select_optimal_time_window(data, targets, fs=250):
     nontarget_mean = np.nanmean(nontarget_data, axis=0)
     
     time = np.arange(data.shape[2]) / fs * 1000  # в мс
+
+    plt.figure(figsize=(12, 6))
+    for ch in range(min(8, data.shape[1])):  # первые 8 каналов
+
+        target_mean[ch] = np.nan_to_num(target_mean[ch], nan=0.0)
+        nontarget_mean[ch] = np.nan_to_num(nontarget_mean[ch], nan=0.0)
+        plt.plot(time, target_mean[ch], label=f'Channel {ch}', alpha=0.7)
+        plt.plot(time, nontarget_mean[ch], label=f'Channel {ch}', alpha=0.7, linestyle='--')
+
+    start_idx = int((300) * fs / 1000)
+    end_idx = int((550) * fs / 1000)
+    
+    plt.axvline(300, color='r', linestyle='--', label='300ms')
+    plt.axvline(550, color='r', linestyle='--', label='550ms')
+    plt.xlabel('Time (ms)')
+    plt.ylabel('Amplitude')
+    plt.title('(Target vs Nontarget)')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
     
     plt.figure(figsize=(12, 6))
     for ch in range(min(8, data.shape[1])):  # первые 8 каналов
@@ -128,12 +148,9 @@ def select_optimal_time_window(data, targets, fs=250):
         # Заменяем NaN на 0 для визуализации
         diff = np.nan_to_num(diff, nan=0.0)
         plt.plot(time, diff, label=f'Channel {ch}', alpha=0.7)
-
-    start_idx = int((250) * fs / 1000)
-    end_idx = int((500) * fs / 1000)
-    
-    plt.axvline(250, color='r', linestyle='--', label='250ms')
-    plt.axvline(500, color='r', linestyle='--', label='500ms')
+        
+    plt.axvline(300, color='r', linestyle='--', label='300ms')
+    plt.axvline(550, color='r', linestyle='--', label='550ms')
     plt.xlabel('Time (ms)')
     plt.ylabel('Target - Nontarget Amplitude')
     plt.title('ERP Difference (Target vs Nontarget)')
@@ -143,7 +160,6 @@ def select_optimal_time_window(data, targets, fs=250):
     
     return start_idx, end_idx
 
-# Применяем оптимальное окно
 def apply_time_window(dataset, start_idx, end_idx):
     """Обрезает данные по выбранному временному окну"""
     windowed_data = dataset.data[:, :, start_idx:end_idx]
@@ -158,16 +174,13 @@ def apply_time_window(dataset, start_idx, end_idx):
 def shuffle_labels_test(model, train_loader, val_loader):
     """Тест с перемешанными метками для проверки переобучения"""
     
-    # СОХРАНИТЕ исходные данные из DataLoader'ов
     train_dataset = train_loader.dataset
     val_dataset = val_loader.dataset
     
-    # СОЗДАЙТЕ копии данных с перемешанными метками
     shuffled_train_data = train_dataset.data.copy()
     shuffled_train_labels = train_dataset.encoded_labels.copy()
-    np.random.shuffle(shuffled_train_labels)  # Перемешиваем метки
+    np.random.shuffle(shuffled_train_labels)
     
-    # СОЗДАЙТЕ НОВЫЙ Dataset с перемешанными метками
     shuffled_train_dataset = EEGDataset(
         shuffled_train_data,
         [(str(label), i) for i, label in enumerate(shuffled_train_labels)],
@@ -176,18 +189,16 @@ def shuffle_labels_test(model, train_loader, val_loader):
         std=train_dataset.std
     )
     
-    # СОЗДАЙТЕ НОВЫЙ DataLoader
     shuffled_train_loader = DataLoader(
         shuffled_train_dataset, 
         batch_size=train_loader.batch_size, 
         shuffle=True
     )
     
-    # ТЕПЕРЬ передаем DataLoader, а не список
     shuffled_history = train_model(
         model=model,
-        train_loader=shuffled_train_loader,  # DataLoader, а не список
-        val_loader=val_loader,               # DataLoader, а не список
+        train_loader=shuffled_train_loader, 
+        val_loader=val_loader,             
         num_epochs=50,
         target_class_weight=1.0
     )

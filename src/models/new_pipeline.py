@@ -1,7 +1,8 @@
 from features.eegdataset import EEGDataset, load_and_prepare_data, compute_dataset_stats
 from models.smote import select_optimal_time_window, apply_time_window, apply_smote_balancing, shuffle_labels_test
 from models.eegnet1d import OptimizedEEGNet1D_v2
-from models.train_model import train_model, test_model
+from models.eeg import EEGNet
+from models.train_model import train_model, test_model, print_model_parameters
 from torch.utils.data import DataLoader, ConcatDataset
 import numpy as np
 
@@ -10,17 +11,6 @@ def improved_pipeline(datapath, test_subject=8):
     
     try:
         train_dataset, val_dataset, test_dataset, LE = load_and_prepare_data(datapath, test_subject=test_subject)
-
-        train_mean, train_std = compute_dataset_stats(train_dataset)
-        print(f"Статистики нормализации: mean={train_mean:.4f}, std={train_std:.4f}")
-        
-        # Устанавливаем статистики для всех датасетов
-        train_dataset.mean = train_mean
-        train_dataset.std = train_std
-        val_dataset.mean = train_mean
-        val_dataset.std = train_std
-        test_dataset.mean = train_mean
-        test_dataset.std = train_std
         
         # Визуализация ERP и выбор временного окна
         print("Анализ временного окна...")
@@ -34,6 +24,17 @@ def improved_pipeline(datapath, test_subject=8):
         train_dataset = apply_time_window(train_dataset, start_idx, end_idx)
         val_dataset = apply_time_window(val_dataset, start_idx, end_idx)
         test_dataset = apply_time_window(test_dataset, start_idx, end_idx)
+
+        train_mean, train_std = compute_dataset_stats(train_dataset)
+        print(f"Статистики нормализации: mean={train_mean:.4f}, std={train_std:.4f}")
+        
+        # Устанавливаем статистики для всех датасетов
+        train_dataset.mean = train_mean
+        train_dataset.std = train_std
+        val_dataset.mean = train_mean
+        val_dataset.std = train_std
+        test_dataset.mean = train_mean
+        test_dataset.std = train_std
         
         # Балансировка классов с Borderline-SMOTE
         #print("Применение Borderline-SMOTE...")
@@ -60,14 +61,21 @@ def improved_pipeline(datapath, test_subject=8):
             seq_length=seq_length,
             num_classes=2
         )
+
+        #model = EEGNet(
+        #    input_channels=8,
+        #    seq_length=seq_length,
+        #    num_classes=2
+        #)
         
+        print_model_parameters(model, 'EEGNET')
         # Обучение с оптимизированными параметрами
         print("Начало обучения...")
         history = train_model(
             model=model,
             train_loader=train_loader,
             val_loader=val_loader,
-            num_epochs=100,
+            num_epochs=50,
             target_class_weight=1.0
         )
         
