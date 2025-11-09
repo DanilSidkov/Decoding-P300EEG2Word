@@ -15,7 +15,6 @@ def compute_dataset_stats(dataset):
     data_loader = DataLoader(dataset, batch_size=batch_size, num_workers=2)
     
     for batch, _ in data_loader:
-        # Объединяем все измерения кроме батча
         batch = batch.flatten(1) if batch.dim() > 2 else batch
         batch_np = batch.numpy() if torch.is_tensor(batch) else batch
         batch_flat = batch_np.reshape(-1)

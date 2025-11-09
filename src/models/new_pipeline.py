@@ -16,12 +16,10 @@ def improved_pipeline(datapath, test_subject=8, method=None, use_autoencoder=Fal
     try:
         train_dataset, val_dataset, test_dataset, LE = load_and_prepare_data(datapath, test_subject=test_subject)
         
-        # Визуализация ERP и выбор временного окна
         print("Анализ временного окна...")
         start_idx, end_idx = select_optimal_time_window(train_dataset.data, train_dataset.targets)
         print(f"Оптимальное окно: {start_idx}-{end_idx}")
         
-        # Применяем временное окно
         print("Формы данных до обрезки:")
         print(train_dataset.data.shape)
         print(val_dataset.data.shape)
@@ -38,7 +36,6 @@ def improved_pipeline(datapath, test_subject=8, method=None, use_autoencoder=Fal
         if method == 'csp':
             print("Использование CSP + LDA для классификации...")
             
-            # Подготавливаем данные для CSP
             X_train = train_dataset.data  # (n_trials, n_channels, n_times)
             y_train = train_dataset.encoded_labels
             X_val = val_dataset.data
@@ -46,29 +43,23 @@ def improved_pipeline(datapath, test_subject=8, method=None, use_autoencoder=Fal
             X_test = test_dataset.data
             y_test = test_dataset.encoded_labels
 
-            # Анализируем дисбаланс классов
             print("\nАнализ дисбаланса классов:")
             print(f"Train - Nontarget: {np.sum(y_train == 0)}, Target: {np.sum(y_train == 1)}")
             print(f"Val - Nontarget: {np.sum(y_val == 0)}, Target: {np.sum(y_val == 1)}")
             print(f"Test - Nontarget: {np.sum(y_test == 0)}, Target: {np.sum(y_test == 1)}")
 
-            # Анализируем дисбаланс
             class_counts = np.bincount(y_train)
             imbalance_ratio = class_counts[0] / class_counts[1] if class_counts[1] > 0 else float('inf')
             print(f"Коэффициент дисбаланса: {imbalance_ratio:.2f}:1")
             
-            # Автоматическое решение об использовании SMOTE
             if use_smote == 'auto':
-                # Используем SMOTE только при сильном дисбалансе
                 use_smote_final = imbalance_ratio > 3.0
                 print(f"Автоматический выбор: {'ИСПОЛЬЗОВАТЬ SMOTE' if use_smote_final else 'НЕ использовать SMOTE'}")
             else:
                 use_smote_final = use_smote
             
-            # Находим оптимальное количество компонент
             optimal_components = find_optimal_csp_components(X_train, y_train, X_val, y_val)
             
-            # Применяем SMOTE если нужно
             if use_smote_final:
                 print("Применение SMOTE для балансировки классов...")
                 X_train_balanced, y_train_balanced = apply_smote_to_eeg_csp(
@@ -79,22 +70,17 @@ def improved_pipeline(datapath, test_subject=8, method=None, use_autoencoder=Fal
             
             print(f"После балансировки: {X_train_balanced.shape}, {y_train_balanced.shape}")
             
-            # Обучаем CSP
             csp = CSP(n_components=optimal_components)
             csp.fit(X_train_balanced, y_train_balanced)
             
-            # Визуализируем CSP паттерны
             plot_csp_patterns(csp, title="CSP Spatial Patterns")
             
-            # Оцениваем производительность с использованием balanced accuracy
             print("\nОценка производительности CSP:")
             
-            # Детальная оценка на всех выборках
             train_bal_acc, train_acc, train_cm = csp.detailed_evaluation(X_train, y_train, "TRAIN")
             val_bal_acc, val_acc, val_cm = csp.detailed_evaluation(X_val, y_val, "VALIDATION")
             test_bal_acc, test_acc, test_cm = csp.detailed_evaluation(X_test, y_test, "TEST")
             
-            # Основной метрикой считаем balanced accuracy
             print(f"\nИтоговые результаты CSP:")
             print(f"Train Balanced Accuracy: {train_bal_acc:.3f}")
             print(f"Validation Balanced Accuracy: {val_bal_acc:.3f}")
@@ -111,7 +97,6 @@ def improved_pipeline(datapath, test_subject=8, method=None, use_autoencoder=Fal
             train_mean, train_std = compute_dataset_stats(train_dataset)
             print(f"Статистики нормализации: mean={train_mean:.4f}, std={train_std:.4f}")
             
-            # Устанавливаем статистики для всех датасетов
             train_dataset.mean = train_mean
             train_dataset.std = train_std
             val_dataset.mean = train_mean
@@ -122,11 +107,9 @@ def improved_pipeline(datapath, test_subject=8, method=None, use_autoencoder=Fal
             if use_autoencoder:
                 print("Использование автоэнкодера для извлечения признаков...")
                 
-                # Создаем DataLoader'ы для автоэнкодера
                 autoencoder_train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
                 autoencoder_val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
                 
-                # Создаем и обучаем автоэнкодер
                 seq_length = end_idx - start_idx
                 autoencoder = EEGAutoencoder(
                     input_channels=8,
@@ -137,13 +120,11 @@ def improved_pipeline(datapath, test_subject=8, method=None, use_autoencoder=Fal
                 print("Предварительное обучение автоэнкодера...")
                 train_autoencoder(autoencoder, autoencoder_train_loader, autoencoder_val_loader, num_epochs=50)
                 
-                # Создаем комбинированную модель
                 model = AutoencoderClassifier(autoencoder, num_classes=2)
                 print_model_parameters(autoencoder, 'AutoEncoder')
                 print_model_parameters(model, 'AutoEncoderClassifier')
     
             else:
-                # Выбор модели
                 if model_type == 'vit':
                     print("Использование Vision Transformer для классификации EEG...")
                     seq_length = end_idx - start_idx
@@ -193,20 +174,16 @@ def improved_pipeline(datapath, test_subject=8, method=None, use_autoencoder=Fal
             #print("Применение Borderline-SMOTE...")
             #train_dataset = apply_smote_balancing(train_dataset)
             
-            # Создаем DataLoader'ы
             train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
             val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
             test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
             
-            # Получаем все метки из тренировочного датасета
             train_labels = train_loader.dataset.encoded_labels
             
-            # Автоматически определяем все присутствующие классы
             unique_classes = np.unique(train_labels)
             print(f"Найдены классы в тренировочных данных: {unique_classes}")
             print(f"Длина последовательности после обрезки: {seq_length}")
     
-            # Обучение с оптимизированными параметрами
             print("Начало обучения...")
             history = train_model(
                 model=model,
@@ -216,11 +193,8 @@ def improved_pipeline(datapath, test_subject=8, method=None, use_autoencoder=Fal
                 target_class_weight=1.0
             )
             
-            # Тестирование
             print("Тестирование модели...")
             predictions, true_labels, test_accuracy = test_model(model, test_loader)
-    
-            #shuffle_labels_test(model, train_loader, val_loader)
             
             print(f"Финальная точность на тесте: {test_accuracy:.2f}%")
     

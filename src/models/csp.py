@@ -27,11 +27,9 @@ class CSP:
         """
         n_trials, n_channels, n_times = X.shape
         
-        # Разделяем данные по классам
-        class_0 = X[y == 0]  # nontarget
-        class_1 = X[y == 1]  # target
+        class_0 = X[y == 0]
+        class_1 = X[y == 1]
         
-        # Вычисляем ковариационные матрицы для каждого класса
         cov_0 = np.zeros((n_channels, n_channels))
         cov_1 = np.zeros((n_channels, n_channels))
         
@@ -43,17 +41,13 @@ class CSP:
             cov_1 += np.cov(trial)
         cov_1 /= len(class_1)
         
-        # Решаем обобщенную проблему собственных значений
         eigenvalues, eigenvectors = eigh(cov_1, cov_0 + cov_1)
         
-        # Сортируем собственные векторы по убыванию собственных значений
         idx = np.argsort(eigenvalues)[::-1]
         eigenvectors = eigenvectors[:, idx]
         
-        # Выбираем наиболее информативные компоненты
         self.filters_ = eigenvectors[:, :self.n_components]
         
-        # Обучаем LDA на CSP признаках
         features = self.transform(X)
         self.lda.fit(features, y)
         
@@ -68,9 +62,7 @@ class CSP:
         features = np.zeros((n_trials, self.n_components))
         
         for i in range(n_trials):
-            # Применяем CSP фильтры
             filtered_data = self.filters_.T @ X[i]
-            # Извлекаем признаки как логарифм дисперсии
             features[i] = np.log(np.var(filtered_data, axis=1))
             
         return features

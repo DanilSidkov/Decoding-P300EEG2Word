@@ -75,7 +75,7 @@ def calculate_neuro_metrics(all_predictions, all_labels):
 
     precision, recall, f1, _ = precision_recall_fscore_support(
         all_labels, all_predictions, average=None, labels=[0, 1], zero_division=0
-    ) #, zero_division=0
+    )
 
     try:
         auc = roc_auc_score(all_labels, all_predictions)
@@ -135,14 +135,11 @@ def train_model(
     import numpy as np
     from sklearn.utils.class_weight import compute_class_weight
     
-    # Получаем все метки из тренировочного датасета
     train_labels = train_loader.dataset.encoded_labels
     
-    # Автоматически определяем все присутствующие классы
     unique_classes = np.unique(train_labels)
     print(f"Найдены классы в тренировочных данных: {unique_classes}")
     
-    # Вычисляем веса только для присутствующих классов
     if len(unique_classes) > 0:
         class_weights_array = compute_class_weight(
             'balanced',
@@ -152,7 +149,6 @@ def train_model(
         class_weights = torch.tensor(class_weights_array, dtype=torch.float32).to(device)
         print(f"Вычисленные веса классов: {class_weights}")
     else:
-        # Fallback если нет данных
         class_weights = torch.tensor([1.0, 1.0]).to(device)
         print("Предупреждение: используем веса по умолчанию") 
 

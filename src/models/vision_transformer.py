@@ -63,7 +63,6 @@ class MultiHeadAttention(nn.Module):
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
         
-        # Scaled dot-product attention
         attn = (q @ k.transpose(-2, -1)) * (self.head_dim ** -0.5)
         attn = attn.softmax(dim=-1)
         attn = self.attn_dropout(attn)
@@ -92,7 +91,6 @@ class TransformerEncoderLayer(nn.Module):
         )
         
     def forward(self, x):
-        # Pre-norm architecture
         x = x + self.attn(self.norm1(x))
         x = x + self.mlp(self.norm2(x))
         return x
@@ -143,23 +141,18 @@ class EEGVisionTransformer(nn.Module):
         # x: (batch_size, channels, seq_length)
         batch_size = x.shape[0]
         
-        # Создание патчей
         x = self.patch_embed(x)  # (batch_size, num_patches, embed_dim)
         
-        # Добавление класс токена
         cls_tokens = self.cls_token.expand(batch_size, -1, -1)
         x = torch.cat((cls_tokens, x), dim=1)  # (batch_size, num_patches+1, embed_dim)
         
-        # Позиционное кодирование
         x = self.pos_encoding(x)
         x = self.dropout(x)
         
-        # Трансформер
         for layer in self.encoder_layers:
             x = layer(x)
         x = self.norm(x)
         
-        # Используем только класс токен для классификации
         cls_output = x[:, 0]
         
         return self.head(cls_output)

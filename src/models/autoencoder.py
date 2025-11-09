@@ -12,7 +12,6 @@ class EEGAutoencoder(nn.Module):
         
         self.embedding_dim = embedding_dim
         
-        # Энкодер
         self.encoder = nn.Sequential(
             nn.Conv1d(input_channels, 6, kernel_size=3, padding=1),
             nn.BatchNorm1d(6),
@@ -36,7 +35,6 @@ class EEGAutoencoder(nn.Module):
             nn.Linear(16, embedding_dim)
         )
         
-        # Декодер
         self.decoder = nn.Sequential(
             nn.Linear(embedding_dim, 16),
             nn.ReLU(),
@@ -106,7 +104,6 @@ class AutoencoderClassifier(nn.Module):
         )
     
     def forward(self, x):
-        # Используем только энкодер для классификации
         embedding = self.autoencoder.encode(x)
         classification = self.classifier(embedding)
         return classification
@@ -127,7 +124,6 @@ def train_autoencoder(model, train_loader, val_loader, num_epochs=100):
     val_losses = []
     
     for epoch in range(num_epochs):
-        # Обучение
         model.train()
         train_loss = 0.0
         for signals, _ in train_loader:
@@ -141,7 +137,6 @@ def train_autoencoder(model, train_loader, val_loader, num_epochs=100):
             
             train_loss += loss.item()
         
-        # Валидация
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
@@ -185,11 +180,9 @@ def visualize_embeddings(model, dataloader, title="Эмбеддинги EEG си
     all_embeddings = np.concatenate(all_embeddings)
     all_labels = np.concatenate(all_labels)
     
-    # Применяем t-SNE для визуализации
     tsne = TSNE(n_components=2, random_state=42, perplexity=30)
     embeddings_2d = tsne.fit_transform(all_embeddings)
     
-    # Визуализация
     plt.figure(figsize=(10, 8))
     scatter = plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], 
                          c=all_labels, cmap='viridis', alpha=0.7)

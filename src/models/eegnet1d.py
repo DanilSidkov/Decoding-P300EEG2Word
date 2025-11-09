@@ -121,7 +121,6 @@ class OptimizedEEGNet1D(nn.Module):
     def __init__(self, input_channels=8, seq_length=250, num_classes=2):
         super().__init__()
         
-        # Временные фильтры оптимального размера
         self.temporal_branch = nn.Sequential(
             nn.Conv1d(input_channels, 16, kernel_size=32, padding=16, groups=input_channels),
             nn.BatchNorm1d(16),
@@ -130,7 +129,6 @@ class OptimizedEEGNet1D(nn.Module):
             nn.Dropout(0.3),
         )
         
-        # Пространственные фильтры
         self.spatial_conv = nn.Sequential(
             nn.Conv1d(16, 32, kernel_size=1),
             nn.BatchNorm1d(32),
@@ -139,7 +137,6 @@ class OptimizedEEGNet1D(nn.Module):
             nn.Dropout(0.3),
         )
         
-        # Сепарабельные свертки
         self.separable_conv = nn.Sequential(
             nn.Conv1d(32, 32, kernel_size=16, padding=8, groups=32),
             nn.Conv1d(32, 64, kernel_size=1),
@@ -151,7 +148,6 @@ class OptimizedEEGNet1D(nn.Module):
         
         self.global_pool = nn.AdaptiveAvgPool1d(1)
         
-        # Классификатор
         self.classifier = nn.Sequential(
             nn.Linear(64, 32),
             nn.BatchNorm1d(32),

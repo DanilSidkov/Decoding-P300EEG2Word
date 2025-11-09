@@ -23,24 +23,21 @@ def apply_smote_to_eeg_csp(X, y, method='regular', random_state=42):
     if method == 'none':
         return X, y
     
-    # Преобразуем в 2D для SMOTE
     X_2d = X.reshape(n_trials, -1)
     
     if method == 'safe':
-        # Ограниченный SMOTE с проверкой качества
         smote = SMOTE(
             random_state=random_state,
-            sampling_strategy='auto',  # балансируем до равного соотношения
-            k_neighbors=min(3, np.sum(y == 1) - 1)  # осторожные соседи
+            sampling_strategy='auto',
+            k_neighbors=min(3, np.sum(y == 1) - 1)
         )
-    else:  # regular
+    else:
         smote = SMOTE(random_state=random_state)
     
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         X_balanced_2d, y_balanced = smote.fit_resample(X_2d, y)
     
-    # Преобразуем обратно в 3D
     X_balanced = X_balanced_2d.reshape(-1, n_channels, n_times)
     
     print(f"После балансировки: {X_balanced.shape}, метки: {np.unique(y_balanced, return_counts=True)}")
@@ -50,13 +47,11 @@ def apply_smote_to_eeg_csp(X, y, method='regular', random_state=42):
 def evaluate_smote_impact(csp, X_train, y_train, X_val, y_val, X_test, y_test):
     """Сравнение производительности с и без SMOTE"""
     
-    # Без SMOTE
     csp_no_smote = CSP(n_components=csp.n_components)
     csp_no_smote.fit(X_train, y_train)
     
     bal_acc_no_smote = csp_no_smote.balanced_score(X_test, y_test)
     
-    # Со SMOTE
     X_train_smote, y_train_smote = apply_smote_to_eeg_csp(X_train, y_train, method='safe')
     csp_smote = CSP(n_components=csp.n_components)
     csp_smote.fit(X_train_smote, y_train_smote)

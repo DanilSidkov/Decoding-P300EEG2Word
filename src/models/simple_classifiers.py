@@ -93,15 +93,12 @@ def compare_classifiers(X_train, y_train, X_val, y_val):
     for name, clf in classifiers.items():
         print(f"\n=== Обучение {name} ===")
         
-        # Кросс-валидация
         cv_scores = cross_val_score(clf, X_train, y_train, cv=5, scoring='balanced_accuracy')
         print(f"Cross-val scores: {cv_scores}")
         print(f"Mean CV accuracy: {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
         
-        # Обучение на всех тренировочных данных
         clf.fit(X_train, y_train)
         
-        # Оценка на валидации
         y_val_pred = clf.predict(X_val)
         val_balanced_accuracy = balanced_accuracy_score(y_val, y_val_pred)
         print(f"Validation balanced accuracy: {val_balanced_accuracy:.4f}")
@@ -113,7 +110,6 @@ def compare_classifiers(X_train, y_train, X_val, y_val):
             'val_balanced_accuracy': val_balanced_accuracy
         }
     
-    # Выбор лучшего классификатора
     best_name = max(results.keys(), key=lambda x: results[x]['val_balanced_accuracy'])
     best_model = results[best_name]['model']
     
