@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from sklearn.metrics import balanced_accuracy_score
-
+from sklearn.manifold import TSNE
 def simple_classifier_pipeline(datapath, test_subject=8, classifier_type='svm'):
     """Пайплайн с автоэнкодером и простым классификатором"""
     

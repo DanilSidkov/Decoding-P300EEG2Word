@@ -9,7 +9,7 @@ from models.autoencoder import EEGAutoencoder, AutoencoderClassifier, train_auto
 from models.csp import CSP, find_optimal_csp_components, plot_csp_patterns
 from models.csp_smote import apply_smote_to_eeg_csp
 from models.vision_transformer import EEGVisionTransformer, EnhancedEEGViT
-
+from sklearn.manifold import TSNE
 def improved_pipeline(datapath, test_subject=8, method=None, use_autoencoder=False, use_smote='auto', model_type='vit'):
     """Улучшенный пайплайн обучения с учетом всех рекомендаций"""
     

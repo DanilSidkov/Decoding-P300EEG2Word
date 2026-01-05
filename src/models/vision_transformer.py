@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from einops import rearrange, repeat
-
+from sklearn.manifold import TSNE
 class PatchEmbedding1D(nn.Module):
     """Преобразование 1D сигнала в последовательность патчей"""
     

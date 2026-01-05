@@ -115,7 +115,7 @@ class EEGDataset(Dataset):
     
     def __getitem__(self, idx):
         signal = self.data[idx].copy()
-        signal = self.normalize_signal(signal)
+        #signal = self.normalize_signal(signal)
         
         if self.augment:
             rng = np.random.RandomState(seed=idx + int(torch.utils.data.get_worker_info().id if torch.utils.data.get_worker_info() else 0))

@@ -130,8 +130,8 @@ def select_optimal_time_window(data, targets, fs=250):
         plt.plot(time, target_mean[ch], label=f'Channel {ch}', alpha=0.7)
         plt.plot(time, nontarget_mean[ch], label=f'Channel {ch}', alpha=0.7, linestyle='--')
 
-    start_idx = int((300) * fs / 1000)
-    end_idx = int((550) * fs / 1000)
+    start_idx = int((700) * fs / 1000)
+    end_idx = int((850) * fs / 1000)
     
     plt.axvline(300, color='r', linestyle='--', label='300ms')
     plt.axvline(550, color='r', linestyle='--', label='550ms')
