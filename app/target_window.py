@@ -12,6 +12,9 @@ class TargetWindow:
         self.on_start_callback = on_start_callback
         self.symbol = symbol
         
+        if self.symbol == ' ':
+            self.symbol = '_'
+
         # Получаем размеры экрана
         screen_width = parent.winfo_screenwidth()
         screen_height = parent.winfo_screenheight()

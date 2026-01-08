@@ -2,18 +2,22 @@ import tkinter as tk
 from tkinter import messagebox
 import threading
 import time
+from app.get_logger import setup_logger
+import logging
+from app.code_generator import CodeGen
 
 class SSVEPSpellerExperiment:
     def __init__(self, root):
         self.root = root
+        self.logger = logging.getLogger("BCI")
+        setup_logger(self.logger, "Experiment")
         
-        self.setup_symbols()
-        
+        self.codelen = 9
         self.cycle_duration = 0.5
         self.num_cycles = 10
         self.base_interval = self.cycle_duration / 9
         self.transition_duration = self.base_interval * 0.2
-        
+
         self.is_running = False
         self.current_interval = 0
         self.output_text = ""
@@ -30,28 +34,31 @@ class SSVEPSpellerExperiment:
     
     def start(self):
         """Запускает последовательность окон"""
+        self.logger.info("Начало работы")
         self._show_welcome()
     
     def _show_welcome(self):
         """Показывает приветственное окно"""
         from app.welcome import WelcomeWindow
+        self.logger.info("Показ приветственного окна")
         WelcomeWindow(self._show_instructions)
     
     def _show_instructions(self):
         """Показывает окно инструкций"""
         from app.instructions import InstructionWindow
+        self.logger.info("Показ окна инструкций")
         InstructionWindow(self._show_preparation)
     
     def _show_preparation(self):
         """Окно подготовки"""
         self.prep_window = tk.Toplevel(self.root)
         self.prep_window.title("Подготовка")
-        self.prep_window.geometry("450x400")
+        self.prep_window.geometry("450x600")
         self.prep_window.configure(bg='white')
         self.prep_window.resizable(False, False)
         
         self._center_window(self.prep_window)
-        
+        self.logger.info("Ввод данных")
         tk.Label(
             self.prep_window,
             text="НАСТРОЙКИ ЭКСПЕРИМЕНТА",
@@ -112,12 +119,29 @@ class SSVEPSpellerExperiment:
 
         tk.Label(
             self.prep_window,
-            text="(1 цикл = 9 интервалов мигания)",
+            text="(1 цикл = N (длина кода) интервалов мигания)",
             font=('Arial', 9),
             bg='white',
             fg='#7f8c8d'
         ).pack(pady=(0, 10))
 
+        tk.Label(
+            self.prep_window,
+            text="Длина двоичного кода:",
+            font=('Arial', 11),
+            bg='white',
+            fg='#34495e'
+        ).pack()
+
+        self.codelen_entry = tk.Entry(
+            self.prep_window,
+            font=('Arial', 12),
+            width=10,
+            justify='center'
+        )
+        self.codelen_entry.insert(0, "9")  # По умолчанию 9
+        self.codelen_entry.pack(pady=(5, 25))
+    
         tk.Button(
             self.prep_window,
             text="НАЧАТЬ ЭКСПЕРИМЕНТ",
@@ -145,22 +169,29 @@ class SSVEPSpellerExperiment:
         try:
             text = self.text_entry.get().upper()
             if not text:
+                self.logger.critical("Текст не введен")
                 messagebox.showerror("Ошибка", "Введите текст")
                 return
             
+            self.logger.info("Запуск эксперимента!")
+            self.codelen = int(self.codelen_entry.get())
+            self.setup_symbols()
+
             self.target_symbols = list(text)
             self.current_target_index = 0
             
             duration = float(self.duration_entry.get())
             if duration <= 0:
+                self.logger.error("Ошибка длительности")
                 raise ValueError("Длительность должна быть > 0")
             
             self.cycle_duration = duration
-            self.base_interval = self.cycle_duration / 9
+            self.base_interval = self.cycle_duration / self.codelen
             self.transition_duration = self.base_interval * 0.2
 
             cycles = int(self.cycles_entry.get())
             if cycles <= 0:
+                self.logger.error("Ошибка количества циклов")
                 raise ValueError("Количество циклов должно быть > 0")
             
             self.num_cycles = cycles
@@ -172,6 +203,7 @@ class SSVEPSpellerExperiment:
             self._show_next_target()
             
         except ValueError as e:
+            self.logger.critical("Некорректные данные")
             messagebox.showerror("Ошибка", f"Некорректные данные: {e}")
     
     def _setup_main_ui(self):
@@ -227,6 +259,7 @@ class SSVEPSpellerExperiment:
         grid_container = tk.Frame(top_paned, bg='white')
         top_paned.add(grid_container, height=int(window_height * 0.8 * 0.9))
         
+
         self._create_symbol_grid(grid_container)
 
         # Нижняя часть: управление и результаты (20% окна)
@@ -263,7 +296,7 @@ class SSVEPSpellerExperiment:
         # Прогресс мигания
         self.progress_label = tk.Label(
             left_bottom_frame,
-            text=f"Цикл: 0/{self.num_cycles} | Интервал: 0/9",
+            text=f"Цикл: 0/{self.num_cycles} | Интервал: 0/{self.codelen}",
             font=('Arial', 10),
             bg='white',
             fg='#3498db'
@@ -362,46 +395,9 @@ class SSVEPSpellerExperiment:
     
     def setup_symbols(self):
         """Настройка символов"""
-        self.symbols = list('АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ') + [' ', ',', '.']
-        
-        self.patterns = [
-            [1,1,1,1,1,1,1,1,1],  # А
-            [0,1,1,1,1,1,1,1,1],  # Б
-            [0,0,1,1,1,1,1,1,1],  # В
-            [0,1,0,1,1,1,1,1,1],  # Г
-            [0,1,1,0,1,1,1,1,1],  # Д
-            [0,1,1,1,0,1,1,1,1],  # Е
-            [0,0,0,1,1,1,1,1,1],  # Ё
-            [0,0,1,0,1,1,1,1,1],  # Ж
-            [0,0,1,1,0,1,1,1,1],  # З
-            [0,0,1,1,1,0,1,1,1],  # И
-            [0,0,1,1,1,1,0,1,1],  # Й
-            [0,0,1,1,1,1,1,0,1],  # К
-            [0,1,0,1,0,1,1,1,1],  # Л
-            [0,1,0,1,1,0,1,1,1],  # М
-            [0,1,0,1,1,1,0,1,1],  # Н
-            [0,1,1,0,1,1,0,1,1],  # О
-            [0,0,0,0,1,1,1,1,1],  # П
-            [0,0,0,1,0,1,1,1,1],  # Р
-            [0,0,0,1,1,0,1,1,1],  # С
-            [0,0,0,1,1,1,0,1,1],  # Т
-            [0,0,0,1,1,1,1,0,1],  # У
-            [0,0,1,0,0,1,1,1,1],  # Ф
-            [0,0,1,0,1,0,1,1,1],  # Х
-            [0,0,1,0,1,1,0,1,1],  # Ц
-            [0,0,1,0,1,1,1,0,1],  # Ч
-            [0,0,1,1,0,0,1,1,1],  # Ш
-            [0,0,1,1,0,1,0,1,1],  # Щ
-            [0,0,1,1,0,1,1,0,1],  # Ъ
-            [0,0,1,1,1,0,1,0,1],  # Ы
-            [0,1,0,1,0,1,0,1,1],  # Ь
-            [0,0,0,0,0,1,1,1,1],  # Э
-            [0,0,0,0,1,0,1,1,1],  # Ю
-            [0,0,0,0,1,1,0,1,1],  # Я
-            [0,0,0,0,1,1,1,0,1],  # пробел
-            [0,0,0,1,0,0,1,1,1],  # запятая
-            [0,0,0,1,0,1,0,1,1]   # точка
-        ]
+        CG = CodeGen(self.codelen)
+        self.symbols = CG.alphabet
+        self.patterns = CG.patterns
     
     def _show_next_target(self):
         """Показывает окно с целевым символом для ввода"""
@@ -443,14 +439,14 @@ class SSVEPSpellerExperiment:
     
     def _flash_sequence(self):
         """Выполняет последовательность мигания (один полный цикл)"""
-        for cycle in range(self.num_cycles):
-            for interval in range(9):
+        for _ in range(self.num_cycles):
+            for interval in range(self.codelen):
                 if not self.is_running:
                     break
                 
                 # Обновляем интервал в UI
                 self.root.after(0, lambda i=interval: self.progress_label.config(
-                    text=f"Интервал: {i+1}/9"
+                    text=f"Интервал: {i+1}/{self.codelen}"
                 ))
                 
                 # Фаза 1: Основное состояние
