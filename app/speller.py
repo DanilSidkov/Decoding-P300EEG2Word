@@ -47,9 +47,17 @@ class SSVEPSpellerExperiment:
 
     def send_event_marker(self, event_type, **kwargs):
         """Отправка маркера события через LSL"""
-        self.outlet.push_sample([f"{event_type} - {kwargs}"])
+        formatted_kwargs = {}
+        for key, value in kwargs.items():
+            if key == 'states' and isinstance(value, str) and len(value) == 36:
+                formatted_kwargs[key] = value
+            else:
+                formatted_kwargs[key] = value
+        marker_string = f"{event_type} - {formatted_kwargs}"
+
+        self.outlet.push_sample([marker_string])
         #self.lsl_service.send_marker(event_type, kwargs)
-        self.logger.info(f"Событие: {event_type} {kwargs}")
+        self.logger.info(f"Событие: {event_type} {formatted_kwargs}")
     
     def start(self):
         """Запускает последовательность окон"""
@@ -484,22 +492,37 @@ class SSVEPSpellerExperiment:
             if not self.is_running:
                 break
             
+            target_index = self.symbols.index(self.target_symbol) if self.target_symbol in self.symbols else -1
+
             self.send_event_marker(
                 "CYCLE_START", 
                 cycle=cycle+1, 
-                total_cycles=self.num_cycles
+                total_cycles=self.num_cycles,
+                target_symbol = self.target_symbol,
+                target_index = target_index
             )
             
             for interval in range(self.codelen):
                 if not self.is_running:
                     break
                 
+                states = []
+                for i in range(len(self.symbols)):
+                    if i < len(self.patterns):
+                        states.append(self.patterns[i][interval])
+                    else:
+                        states.append(0)
+
+                states_str = ''.join(str(s) for s in states)
 
                 self.send_event_marker(
                     "FLASH_INTERVAL_START",
                     interval=interval+1,
                     cycle=cycle+1,
-                    symbol=self.target_symbol
+                    target_symbol = self.target_symbol,
+                    target_index = target_index,
+                    states = states_str,
+                    target_state = self.patterns[target_index][interval] if target_index != -1 else 0
                 )
                 
                 # Фаза 1: Основное состояние
@@ -519,10 +542,14 @@ class SSVEPSpellerExperiment:
                     time.sleep(self.base_interval * 0.1)
             
             # Маркер конца цикла
-            self.root.after(0, lambda: self.send_event_marker(
+            self.send_event_marker(
                 "CYCLE_END", 
-                cycle=cycle+1
-            ))
+                cycle=cycle+1,
+                target_symbol = self.target_symbol,
+                total_intervals=self.codelen
+            )
+        if self.is_running:
+            self.root.after(0,self._finish_symbol)
     
     def _finish_symbol(self):
         """Завершает ввод текущего символа"""
