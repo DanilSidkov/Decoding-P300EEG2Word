@@ -29,7 +29,7 @@ class LSLMarkerService:
         try:
             info = StreamInfo(
                 name='BCI_Experiment_Markers',
-                type='Markers',
+                type='Events',
                 channel_count=1,
                 nominal_srate=0,
                 channel_format='string',

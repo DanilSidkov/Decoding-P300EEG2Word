@@ -5,7 +5,8 @@ import time
 from app.get_logger import setup_logger
 import logging
 from app.code_generator import CodeGen
-from app.lsl_markers import LSLMarkerService
+#from app.lsl_markers import LSLMarkerService
+from pylsl import StreamInfo, StreamOutlet
 
 class SSVEPSpellerExperiment:
     def __init__(self, root):
@@ -34,11 +35,20 @@ class SSVEPSpellerExperiment:
         self.screen_height = self.root.winfo_screenheight()
 
         self.controller = None
-        self.lsl_service = LSLMarkerService()
+        info = StreamInfo(name='annotations',
+                  type='Events', # 'Markers'
+                  channel_count=1,
+                  nominal_srate=0,
+                  channel_format='string',
+                  source_id='my_marker_stream')
+        self.outlet = StreamOutlet(info)
+
+        #self.lsl_service = LSLMarkerService()
 
     def send_event_marker(self, event_type, **kwargs):
         """Отправка маркера события через LSL"""
-        self.lsl_service.send_marker(event_type, kwargs)
+        self.outlet.push_sample([f"{event_type} - {kwargs}"])
+        #self.lsl_service.send_marker(event_type, kwargs)
         self.logger.info(f"Событие: {event_type} {kwargs}")
     
     def start(self):
@@ -49,20 +59,20 @@ class SSVEPSpellerExperiment:
     def _show_welcome(self):
         """Показывает приветственное окно"""
         from app.welcome import WelcomeWindow
-        self.send_event_marker("WINDOW_OPEN", window="welcome")
+        self.send_event_marker("WINDOW_OPEN_hello", window="welcome")
         self.logger.info("Показ приветственного окна")
         WelcomeWindow(self._show_instructions)
     
     def _show_instructions(self):
         """Показывает окно инструкций"""
         from app.instructions import InstructionWindow
-        self.send_event_marker("WINDOW_OPEN", window="instructions")
+        self.send_event_marker("WINDOW_OPEN_instruct", window="instructions")
         self.logger.info("Показ окна инструкций")
         InstructionWindow(self._show_preparation)
     
     def _show_preparation(self):
         """Окно подготовки"""
-        self.send_event_marker("WINDOW_OPEN", window="preparation")
+        self.send_event_marker("WINDOW_OPEN_preparation", window="preparation")
         self.prep_window = tk.Toplevel(self.root)
         self.prep_window.title("Подготовка")
         self.prep_window.geometry("450x600")
@@ -422,7 +432,7 @@ class SSVEPSpellerExperiment:
         if self.current_target_index < len(self.target_symbols):
             self.target_symbol = self.target_symbols[self.current_target_index]
 
-            self.send_event_marker("TARGET_SHOW", 
+            self.send_event_marker("Смотрите на целевой символ и нажмите ПРОБЕЛ", 
                         symbol=self.target_symbol,
                         index=self.current_target_index,
                         total=len(self.target_symbols))
@@ -474,25 +484,23 @@ class SSVEPSpellerExperiment:
             if not self.is_running:
                 break
             
-            # Маркер начала цикла
-            self.root.after(0, lambda: self.send_event_marker(
+            self.send_event_marker(
                 "CYCLE_START", 
                 cycle=cycle+1, 
                 total_cycles=self.num_cycles
-            ))
+            )
             
             for interval in range(self.codelen):
                 if not self.is_running:
                     break
                 
-                # Маркер начала интервала мигания
-                if interval == 0:  # Первый интервал цикла
-                    self.root.after(0, lambda: self.send_event_marker(
-                        "FLASH_INTERVAL_START",
-                        interval=interval+1,
-                        cycle=cycle+1,
-                        symbol=self.target_symbol
-                    ))
+
+                self.send_event_marker(
+                    "FLASH_INTERVAL_START",
+                    interval=interval+1,
+                    cycle=cycle+1,
+                    symbol=self.target_symbol
+                )
                 
                 # Фаза 1: Основное состояние
                 for i, label in enumerate(self.labels):

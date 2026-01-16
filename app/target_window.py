@@ -1,5 +1,5 @@
 import tkinter as tk
-from app.lsl_markers import LSLMarkerService
+#from app.lsl_markers import LSLMarkerService
 
 class TargetWindow:
     """Окно для отображения целевого символа"""
@@ -15,8 +15,8 @@ class TargetWindow:
         
         if self.symbol == ' ':
             self.symbol = '_'
-        self.lsl_service = LSLMarkerService()
-        self.lsl_service.send_marker("TARGET_WINDOW_OPEN", symbol=symbol)
+        #self.lsl_service = LSLMarkerService()
+        #self.lsl_service.send_marker("TARGET_WINDOW_OPEN")#, symbol=symbol)
         # Получаем размеры экрана
         screen_width = parent.winfo_screenwidth()
         screen_height = parent.winfo_screenheight()
@@ -97,7 +97,7 @@ class TargetWindow:
     
     def _on_space_pressed(self, event=None):
         """Обработка нажатия пробела"""
-        self.lsl_service.send_marker("TARGET_WINDOW_CLOSE", symbol=self.symbol)
+        #self.lsl_service.send_marker("TARGET_WINDOW_CLOSE")#, symbol=self.symbol)
         self.window.destroy()
         self.on_start_callback()
     
