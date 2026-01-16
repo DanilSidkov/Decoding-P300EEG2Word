@@ -5,6 +5,7 @@ import time
 from app.get_logger import setup_logger
 import logging
 from app.code_generator import CodeGen
+from app.lsl_markers import LSLMarkerService
 
 class SSVEPSpellerExperiment:
     def __init__(self, root):
@@ -31,6 +32,14 @@ class SSVEPSpellerExperiment:
 
         self.screen_width = self.root.winfo_screenwidth()
         self.screen_height = self.root.winfo_screenheight()
+
+        self.controller = None
+        self.lsl_service = LSLMarkerService()
+
+    def send_event_marker(self, event_type, **kwargs):
+        """Отправка маркера события через LSL"""
+        self.lsl_service.send_marker(event_type, kwargs)
+        self.logger.info(f"Событие: {event_type} {kwargs}")
     
     def start(self):
         """Запускает последовательность окон"""
@@ -40,17 +49,20 @@ class SSVEPSpellerExperiment:
     def _show_welcome(self):
         """Показывает приветственное окно"""
         from app.welcome import WelcomeWindow
+        self.send_event_marker("WINDOW_OPEN", window="welcome")
         self.logger.info("Показ приветственного окна")
         WelcomeWindow(self._show_instructions)
     
     def _show_instructions(self):
         """Показывает окно инструкций"""
         from app.instructions import InstructionWindow
+        self.send_event_marker("WINDOW_OPEN", window="instructions")
         self.logger.info("Показ окна инструкций")
         InstructionWindow(self._show_preparation)
     
     def _show_preparation(self):
         """Окно подготовки"""
+        self.send_event_marker("WINDOW_OPEN", window="preparation")
         self.prep_window = tk.Toplevel(self.root)
         self.prep_window.title("Подготовка")
         self.prep_window.geometry("450x600")
@@ -195,6 +207,12 @@ class SSVEPSpellerExperiment:
                 raise ValueError("Количество циклов должно быть > 0")
             
             self.num_cycles = cycles
+
+            self.send_event_marker("EXPERIMENT_START", 
+                        text=self.text_entry.get(),
+                        codelen=self.codelen,
+                        duration=self.cycle_duration,
+                        cycles=self.num_cycles)
             
             self.prep_window.destroy()
             
@@ -403,6 +421,11 @@ class SSVEPSpellerExperiment:
         """Показывает окно с целевым символом для ввода"""
         if self.current_target_index < len(self.target_symbols):
             self.target_symbol = self.target_symbols[self.current_target_index]
+
+            self.send_event_marker("TARGET_SHOW", 
+                        symbol=self.target_symbol,
+                        index=self.current_target_index,
+                        total=len(self.target_symbols))
             
             self.current_symbol_label.config(
                 text=f"Текущий символ: '{self.target_symbol}' ({self.current_target_index + 1}/{len(self.target_symbols)})"
@@ -422,6 +445,9 @@ class SSVEPSpellerExperiment:
     
     def _on_target_confirmed(self):
         """Вызывается после подтверждения целевого символа (нажатия пробела)"""
+        self.send_event_marker("TARGET_CONFIRMED", 
+                              symbol=self.target_symbol,
+                              index=self.current_target_index)
         self.root.deiconify()
         
         self.status_label.config(text="Мигание... Смотрите на целевой символ", fg='#e74c3c')
@@ -431,6 +457,11 @@ class SSVEPSpellerExperiment:
     def _start_flashing(self):
         """Запускает мигание для текущего символа"""
         if not self.is_running:
+            self.send_event_marker("FLASHING_START",
+                                symbol=self.target_symbol,
+                                duration=self.cycle_duration,
+                                cycles=self.num_cycles,
+                                codelen=self.codelen)
             self.is_running = True
             self.current_interval = 0
             
@@ -438,16 +469,30 @@ class SSVEPSpellerExperiment:
             self.flash_thread.start()
     
     def _flash_sequence(self):
-        """Выполняет последовательность мигания (один полный цикл)"""
-        for _ in range(self.num_cycles):
+        """Выполняет последовательность мигания с маркерами"""
+        for cycle in range(self.num_cycles):
+            if not self.is_running:
+                break
+            
+            # Маркер начала цикла
+            self.root.after(0, lambda: self.send_event_marker(
+                "CYCLE_START", 
+                cycle=cycle+1, 
+                total_cycles=self.num_cycles
+            ))
+            
             for interval in range(self.codelen):
                 if not self.is_running:
                     break
                 
-                # Обновляем интервал в UI
-                self.root.after(0, lambda i=interval: self.progress_label.config(
-                    text=f"Интервал: {i+1}/{self.codelen}"
-                ))
+                # Маркер начала интервала мигания
+                if interval == 0:  # Первый интервал цикла
+                    self.root.after(0, lambda: self.send_event_marker(
+                        "FLASH_INTERVAL_START",
+                        interval=interval+1,
+                        cycle=cycle+1,
+                        symbol=self.target_symbol
+                    ))
                 
                 # Фаза 1: Основное состояние
                 for i, label in enumerate(self.labels):
@@ -464,18 +509,27 @@ class SSVEPSpellerExperiment:
                     for label in self.labels:
                         label.config(fg='#999999')
                     time.sleep(self.base_interval * 0.1)
-        
-        if self.is_running:
-            self.root.after(0, self._finish_symbol)
+            
+            # Маркер конца цикла
+            self.root.after(0, lambda: self.send_event_marker(
+                "CYCLE_END", 
+                cycle=cycle+1
+            ))
     
     def _finish_symbol(self):
         """Завершает ввод текущего символа"""
+
         self.is_running = False
         
         for label in self.labels:
             label.config(fg='#999999')
         
         self.output_text += self.target_symbol
+
+        self.send_event_marker("SYMBOL_FINISHED",
+                        symbol=self.target_symbol,
+                        output_text=self.output_text,
+                        index=self.current_target_index)
         self.text_display.delete(1.0, tk.END)
         self.text_display.insert(1.0, self.output_text)
         self.text_display.see(tk.END)
@@ -490,8 +544,12 @@ class SSVEPSpellerExperiment:
     
     def _finish_experiment(self):
         """Завершает эксперимент"""
+        self.send_event_marker("EXPERIMENT_END",
+                        final_text=self.output_text,
+                        total_symbols=len(self.target_symbols))
         self.status_label.config(text="Эксперимент завершен!", fg='#27ae60')
         self.progress_label.config(text="Завершено")
+
         
         # Показываем сообщение
         messagebox.showinfo(

@@ -5,7 +5,7 @@
 groups = ["default", "ness-dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:ecb3054ab04aefef96f94c2b700630db7e815eaa68f379ca2fdb1963e38b3450"
+content_hash = "sha256:69887391d61311fe95e578c4419c3ea08defd55e65b0fd2319eea931a659af1d"
 
 [[metadata.targets]]
 requires_python = "==3.10.4"
@@ -2159,6 +2159,24 @@ groups = ["default"]
 files = [
     {file = "pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b"},
     {file = "pygments-2.19.2.tar.gz", hash = "sha256:636cb2477cec7f8952536970bc533bc43743542f70392ae026374600add5b887"},
+]
+
+[[package]]
+name = "pylsl"
+version = "1.18.1"
+requires_python = ">=3.9"
+summary = "Python library for importing XDF (Extensible Data Format)"
+groups = ["default"]
+dependencies = [
+    "numpy<3,>=1.21",
+]
+files = [
+    {file = "pylsl-1.18.1-py2.py3-none-any.whl", hash = "sha256:61a2eafe1b72dacc1d0bcf0f0fa2ba571d3183e55096b2bf37d3412b04cf33dc"},
+    {file = "pylsl-1.18.1-py2.py3-none-macosx_11_0_universal2.whl", hash = "sha256:435346577a8e518450bf9babebcc8bf16973a6855a1fd083f1010dd6647d4e16"},
+    {file = "pylsl-1.18.1-py2.py3-none-manylinux_2_35_x86_64.whl", hash = "sha256:be1363b0470b4763731dbb3973150ae9fd3102666a2df725f866213ce0dd1776"},
+    {file = "pylsl-1.18.1-py2.py3-none-win32.whl", hash = "sha256:e1c3af9d1ec1e9c849316fd6abdad99ec3b33d81de7d7192b5edaa6c408c5819"},
+    {file = "pylsl-1.18.1-py2.py3-none-win_amd64.whl", hash = "sha256:ea2418f54a8cd0635960525ff4b8d4d388384dfd95cd82efd056297e46879944"},
+    {file = "pylsl-1.18.1.tar.gz", hash = "sha256:a422d379f22e72ab94c65d815d420c9961dbc80064240062a4cbc72ba885f419"},
 ]
 
 [[package]]

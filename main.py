@@ -14,3 +14,22 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+#from app.controller import ExperimentController
+#
+#def main():
+#    controller = ExperimentController()
+#    
+#    try:
+#        controller.start_experiment()
+#    except KeyboardInterrupt:
+#        print("Эксперимент прерван пользователем")
+#    except Exception as e:
+#        print(f"Ошибка: {e}")
+#    finally:
+#        if controller.neorec_process:
+#            controller.neorec_process.terminate()#
+#
+#if __name__ == "__main__":
+#    main()

@@ -1,0 +1,22 @@
+# config/lsl_config.yaml
+lsl:
+  marker_stream:
+    name: "BCI_Experiment_Markers"
+    type: "Markers"
+    source_id: "bci-experiment-interface"
+    channel_count: 1
+  
+  eeg_streams:
+    - name: "NeoRec_EEG"
+      type: "EEG"
+      channels: 8
+      sampling_rate: 250
+  
+  sync:
+    required_streams: ["BCI_Experiment_Markers", "NeoRec_EEG"]
+    timeout_seconds: 10
+
+recording:
+  output_directory: "data/experiments"
+  file_format: "xdf"
+  backup_interval: 300  # секунд
