@@ -73,7 +73,6 @@ class SSVEPSpellerExperiment:
         marker_string = f"{event_type} - {formatted_kwargs}"
 
         self.outlet.push_sample([marker_string])
-        # self.lsl_service.send_marker(event_type, kwargs)
         self.logger.info(f"Событие: {event_type} {formatted_kwargs}")
 
     def start(self):
@@ -267,7 +266,6 @@ class SSVEPSpellerExperiment:
         self.root.deiconify()
         self.root.attributes("-fullscreen", True)
 
-        # Добавляем кнопку выхода
         exit_button = tk.Button(
             self.root,
             text="✕ ВЫЙТИ",
@@ -303,7 +301,6 @@ class SSVEPSpellerExperiment:
         info_frame = tk.Frame(top_paned, bg="white")
         top_paned.add(info_frame, height=int(window_height * 0.8 * 0.1))
 
-        # Информация о текущем символе
         self.current_symbol_label = tk.Label(
             info_frame,
             text="Ожидание целевого символа...",
@@ -323,27 +320,22 @@ class SSVEPSpellerExperiment:
         )
         self.flash_indicator.pack(side=tk.RIGHT, padx=20)
 
-        # Фрейм сетки символов (90% верхней части)
         grid_container = tk.Frame(top_paned, bg="white")
         top_paned.add(grid_container, height=int(window_height * 0.8 * 0.9))
 
         self._create_symbol_grid(grid_container)
 
-        # Нижняя часть: управление и результаты (20% окна)
         bottom_frame = tk.Frame(main_container, bg="white")
         main_container.add(bottom_frame, height=int(window_height * 0.2))
 
-        # Разделяем нижнюю часть
         bottom_paned = tk.PanedWindow(
             bottom_frame, orient=tk.HORIZONTAL, bg="white", sashwidth=3
         )
         bottom_paned.pack(fill=tk.BOTH, expand=True)
 
-        # Левая панель: настройки и прогресс (40% нижней части)
         left_bottom_frame = tk.Frame(bottom_paned, bg="white")
         bottom_paned.add(left_bottom_frame, width=int(window_width * 0.4))
 
-        # Параметры эксперимента
         tk.Label(
             left_bottom_frame,
             text="ПАРАМЕТРЫ ЭКСПЕРИМЕНТА",
@@ -352,7 +344,6 @@ class SSVEPSpellerExperiment:
             fg="#2c3e50",
         ).pack(anchor="w", padx=20, pady=(15, 5))
 
-        # Отображение настроек
         self.settings_label = tk.Label(
             left_bottom_frame,
             text=f"Длительность цикла: {self.cycle_duration} сек | Циклов: {self.num_cycles}",
@@ -362,7 +353,6 @@ class SSVEPSpellerExperiment:
         )
         self.settings_label.pack(anchor="w", padx=20, pady=(0, 5))
 
-        # Прогресс мигания
         self.progress_label = tk.Label(
             left_bottom_frame,
             text=f"Цикл: 0/{self.num_cycles} | Интервал: 0/{self.codelen}",
@@ -372,7 +362,6 @@ class SSVEPSpellerExperiment:
         )
         self.progress_label.pack(anchor="w", padx=20, pady=(10, 5))
 
-        # Статус
         self.status_label = tk.Label(
             left_bottom_frame,
             text="Готов к началу эксперимента",
@@ -382,11 +371,9 @@ class SSVEPSpellerExperiment:
         )
         self.status_label.pack(anchor="w", padx=20, pady=(5, 0))
 
-        # Правая панель: результаты (60% нижней части)
         right_bottom_frame = tk.Frame(bottom_paned, bg="white")
         bottom_paned.add(right_bottom_frame, width=int(window_width * 0.6))
 
-        # Заголовок результатов
         tk.Label(
             right_bottom_frame,
             text="РЕЗУЛЬТАТ ВВОДА",
@@ -395,19 +382,16 @@ class SSVEPSpellerExperiment:
             fg="#2c3e50",
         ).pack(anchor="w", padx=20, pady=(15, 5))
 
-        # Текстовое поле для результата с прокруткой
         text_container = tk.Frame(right_bottom_frame, bg="white")
         text_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 15))
 
-        # Полоса прокрутки
         scrollbar = tk.Scrollbar(text_container)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # Текстовое поле
         self.text_display = tk.Text(
             text_container,
             font=("Arial", 12),
-            height=3,  # Только 3 строки
+            height=3,
             wrap=tk.WORD,
             yscrollcommand=scrollbar.set,
             bg="#f8f9fa",
@@ -418,7 +402,6 @@ class SSVEPSpellerExperiment:
         self.text_display.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.text_display.yview)
 
-        # Центрируем главное окно
         self.root.update_idletasks()
         x = (self.screen_width - window_width) // 2
         y = (self.screen_height - window_height) // 2
@@ -427,17 +410,11 @@ class SSVEPSpellerExperiment:
     def _create_symbol_grid(self, parent):
         """Создает сетку символов"""
         self.grid_frame = tk.Frame(parent, bg="white")
-        self.grid_frame.pack(pady=(0, 20))
-
-        self.grid_frame = tk.Frame(parent, bg="white")
         self.grid_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Рассчитываем оптимальный размер шрифта на основе размера окна
-        # Используем 6x6 сетку
-        rows = 6
-        cols = 6
+        rows = 3
+        cols = 12
 
-        # Создаем сетку с весами для растяжения
         for i in range(rows):
             self.grid_frame.grid_rowconfigure(i, weight=1)
         for j in range(cols):
@@ -445,28 +422,83 @@ class SSVEPSpellerExperiment:
 
         self.labels = []
         for i, symbol in enumerate(self.symbols):
-            row = i // 6
-            col = i % 6
+            row = i // cols
+            col = i % cols
 
             label = tk.Label(
                 self.grid_frame,
                 text=symbol,
-                font=("Arial", 24, "bold"),
+                font=("Arial", 20, "bold"),
                 bg="white",
                 fg="#999999",
-                width=4,
-                height=2,
+                width=3,
+                height=1,
                 relief="flat",
                 bd=2,
             )
-            label.grid(row=row, column=col, padx=3, pady=3, sticky="nsew")
+            label.grid(row=row, column=col, padx=2, pady=2, sticky="nsew")
             self.labels.append(label)
 
     def setup_symbols(self):
         """Настройка символов"""
         CG = CodeGen(self.codelen)
-        self.symbols = CG.alphabet
-        self.patterns = CG.patterns
+
+        # Символы в алфавитном порядке (из config.py)
+        symbols_alphabetical = CG.alphabet
+
+        # Новый порядок символов как на клавиатуре
+        keyboard_order = [
+            "Й",
+            "Ц",
+            "У",
+            "К",
+            "Е",
+            "Н",
+            "Г",
+            "Ш",
+            "Щ",
+            "З",
+            "Х",
+            "Ъ",
+            "Ф",
+            "Ы",
+            "В",
+            "А",
+            "П",
+            "Р",
+            "О",
+            "Л",
+            "Д",
+            "Ж",
+            "Э",
+            "Ё",
+            "Я",
+            "Ч",
+            "С",
+            "М",
+            "И",
+            "Т",
+            "Ь",
+            "Б",
+            "Ю",
+            ",",
+            ".",
+            "_",
+        ]
+
+        # Проверяем, что все символы из keyboard_order есть в symbols_alphabetical
+        if set(keyboard_order) != set(symbols_alphabetical):
+            raise ValueError(
+                "Набор символов в keyboard_order не совпадает с symbols_alphabetical"
+            )
+        # Создаем список индексов для нового порядка
+        self.symbol_indices = [
+            symbols_alphabetical.index(sym) for sym in keyboard_order
+        ]
+        # Сохраняем символы в порядке клавиатуры
+        self.symbols = keyboard_order
+        # Переупорядочиваем паттерны в соответствии с новым порядком символов
+        self.patterns = [CG.patterns[i] for i in self.symbol_indices]
 
     def _show_next_target(self):
         """Показывает окно с целевым символом для ввода"""
@@ -525,17 +557,34 @@ class SSVEPSpellerExperiment:
             )
             self.is_running = True
             self.current_interval = 0
+            self.current_cycle = 0
+
+            self._update_progress_display()
 
             self.flash_thread = threading.Thread(
                 target=self._flash_sequence, daemon=True
             )
             self.flash_thread.start()
 
+    def _update_progress_display(self):
+        """Обновляет отображение прогресса мигания"""
+        self.progress_label.config(
+            text=f"Цикл: {self.current_cycle}/{self.num_cycles} | Интервал: {self.current_interval}/{self.codelen}"
+        )
+        
+        # Обновляем индикатор мигания
+        if self.is_running:
+            self.flash_indicator.config(text="●", fg="#e74c3c")  # Красный - мигание активно
+        else:
+            self.flash_indicator.config(text="○", fg="#95a5a6")  # Серый - мигание неактивно
+
     def _flash_sequence(self):
         """Выполняет последовательность мигания с маркерами"""
         for cycle in range(self.num_cycles):
             if not self.is_running:
                 break
+            self.current_cycle = cycle + 1
+            self.root.after(0, self._update_progress_display)
 
             target_index = (
                 self.symbols.index(self.target_symbol)
@@ -554,6 +603,8 @@ class SSVEPSpellerExperiment:
             for interval in range(self.codelen):
                 if not self.is_running:
                     break
+                self.current_interval = interval + 1
+                self.root.after(0, self._update_progress_display)
 
                 states = []
                 for i in range(len(self.symbols)):
@@ -599,12 +650,19 @@ class SSVEPSpellerExperiment:
                 target_symbol=self.target_symbol,
                 total_intervals=self.codelen,
             )
+
+        self.current_interval = 0
         if self.is_running:
             self.root.after(0, self._finish_symbol)
 
     def _finish_symbol(self):
         """Завершает ввод текущего символа"""
         self.is_running = False
+
+        self.current_cycle = 0
+        self.current_interval = 0
+
+        self._update_progress_display()
 
         for label in self.labels:
             label.config(fg="#999999")
