@@ -37,36 +37,52 @@ class TemporalAttention(nn.Module):
 
     def forward(self, x):
         batch, channels, time = x.size()
-        avg_out = self.global_avgpool(x.transpose(1, 2)).view(
-            batch, time
-        )
+        avg_out = self.global_avgpool(x.transpose(1, 2)).view(batch, time)
         weights = self.fc(avg_out).view(batch, 1, time)
         return x * weights.expand_as(x)
 
 
 class OptimizedEEGNet1D_v2(nn.Module):
     """Улучшенная версия с оптимальными параметрами для 250 точек"""
-    
+
     def __init__(self, input_channels=8, seq_length=250, num_classes=2):
         super().__init__()
-        
+
         # Временные фильтры - мультимасштабные
         self.temporal_branch_small = nn.Sequential(
-            nn.Conv1d(input_channels, 8, kernel_size=16, padding=8, groups=input_channels),
+            nn.Conv1d(
+                input_channels,
+                8,
+                kernel_size=16,
+                padding=8,
+                groups=input_channels,
+            ),
             nn.BatchNorm1d(8),
             nn.ELU(),
         )
         self.temporal_branch_medium = nn.Sequential(
-            nn.Conv1d(input_channels, 8, kernel_size=32, padding=16, groups=input_channels),
+            nn.Conv1d(
+                input_channels,
+                8,
+                kernel_size=32,
+                padding=16,
+                groups=input_channels,
+            ),
             nn.BatchNorm1d(8),
             nn.ELU(),
         )
         self.temporal_branch_large = nn.Sequential(
-            nn.Conv1d(input_channels, 8, kernel_size=64, padding=32, groups=input_channels),
+            nn.Conv1d(
+                input_channels,
+                8,
+                kernel_size=64,
+                padding=32,
+                groups=input_channels,
+            ),
             nn.BatchNorm1d(8),
             nn.ELU(),
         )
-        
+
         self.temporal_merge = nn.Sequential(
             nn.Conv1d(24, 24, kernel_size=1),
             nn.BatchNorm1d(24),
@@ -74,7 +90,7 @@ class OptimizedEEGNet1D_v2(nn.Module):
             nn.AvgPool1d(2),  # 250 -> 125
             nn.Dropout(0.3),
         )
-        
+
         # Остальные слои остаются прежними...
         self.spatial_conv = nn.Sequential(
             nn.Conv1d(24, 32, kernel_size=1),
@@ -83,7 +99,7 @@ class OptimizedEEGNet1D_v2(nn.Module):
             nn.AvgPool1d(4),  # 125 -> 31
             nn.Dropout(0.3),
         )
-        
+
         self.separable_conv = nn.Sequential(
             nn.Conv1d(32, 32, kernel_size=16, padding=8, groups=32),
             nn.Conv1d(32, 64, kernel_size=1),
@@ -92,9 +108,9 @@ class OptimizedEEGNet1D_v2(nn.Module):
             nn.AvgPool1d(2),  # 31 -> 15
             nn.Dropout(0.3),
         )
-        
+
         self.global_pool = nn.AdaptiveAvgPool1d(1)
-        
+
         self.classifier = nn.Sequential(
             nn.Linear(64, 32),
             nn.BatchNorm1d(32),
@@ -102,7 +118,7 @@ class OptimizedEEGNet1D_v2(nn.Module):
             nn.Dropout(0.5),
             nn.Linear(32, num_classes),
         )
-    
+
     def forward(self, x):
         x_small = self.temporal_branch_small(x)
         x_medium = self.temporal_branch_medium(x)
@@ -117,18 +133,24 @@ class OptimizedEEGNet1D_v2(nn.Module):
 
 class OptimizedEEGNet1D(nn.Module):
     """Оптимизированная версия EEGNet с улучшенными параметрами"""
-    
+
     def __init__(self, input_channels=8, seq_length=250, num_classes=2):
         super().__init__()
-        
+
         self.temporal_branch = nn.Sequential(
-            nn.Conv1d(input_channels, 16, kernel_size=32, padding=16, groups=input_channels),
+            nn.Conv1d(
+                input_channels,
+                16,
+                kernel_size=32,
+                padding=16,
+                groups=input_channels,
+            ),
             nn.BatchNorm1d(16),
             nn.ELU(),
             nn.AvgPool1d(4),
             nn.Dropout(0.3),
         )
-        
+
         self.spatial_conv = nn.Sequential(
             nn.Conv1d(16, 32, kernel_size=1),
             nn.BatchNorm1d(32),
@@ -136,7 +158,7 @@ class OptimizedEEGNet1D(nn.Module):
             nn.AvgPool1d(4),
             nn.Dropout(0.3),
         )
-        
+
         self.separable_conv = nn.Sequential(
             nn.Conv1d(32, 32, kernel_size=16, padding=8, groups=32),
             nn.Conv1d(32, 64, kernel_size=1),
@@ -145,9 +167,9 @@ class OptimizedEEGNet1D(nn.Module):
             nn.AvgPool1d(2),
             nn.Dropout(0.3),
         )
-        
+
         self.global_pool = nn.AdaptiveAvgPool1d(1)
-        
+
         self.classifier = nn.Sequential(
             nn.Linear(64, 32),
             nn.BatchNorm1d(32),
@@ -155,7 +177,7 @@ class OptimizedEEGNet1D(nn.Module):
             nn.Dropout(0.5),
             nn.Linear(32, num_classes),
         )
-    
+
     def forward(self, x):
         x = self.temporal_branch(x)
         x = self.spatial_conv(x)

@@ -1,23 +1,37 @@
-from features.eegdataset import EEGDataset, load_and_prepare_data, compute_dataset_stats
-from models.smote import select_optimal_time_window, apply_time_window
-from models.autoencoder import EEGAutoencoder, train_autoencoder, extract_features
-from models.simple_classifiers import SimpleEEGClassifier, compare_classifiers
-from torch.utils.data import DataLoader
-import numpy as np
-import torch
 import matplotlib.pyplot as plt
-from sklearn.metrics import balanced_accuracy_score
+import torch
+from features.eegdataset import (
+    compute_dataset_stats,
+    load_and_prepare_data,
+)
 from sklearn.manifold import TSNE
-def simple_classifier_pipeline(datapath, test_subject=8, classifier_type='svm'):
+from sklearn.metrics import balanced_accuracy_score
+from torch.utils.data import DataLoader
+
+from models.autoencoder import (
+    EEGAutoencoder,
+    extract_features,
+    train_autoencoder,
+)
+from models.simple_classifiers import SimpleEEGClassifier, compare_classifiers
+from models.smote import apply_time_window, select_optimal_time_window
+
+
+def simple_classifier_pipeline(
+    datapath, test_subject=8, classifier_type="svm"
+):
     """Пайплайн с автоэнкодером и простым классификатором"""
-    
     try:
-        train_dataset, val_dataset, test_dataset, LE = load_and_prepare_data(datapath, test_subject=test_subject)
-        
+        train_dataset, val_dataset, test_dataset, LE = load_and_prepare_data(
+            datapath, test_subject=test_subject
+        )
+
         print("Анализ временного окна...")
-        start_idx, end_idx = select_optimal_time_window(train_dataset.data, train_dataset.targets)
+        start_idx, end_idx = select_optimal_time_window(
+            train_dataset.data, train_dataset.targets
+        )
         print(f"Оптимальное окно: {start_idx}-{end_idx}")
-        
+
         train_dataset = apply_time_window(train_dataset, start_idx, end_idx)
         val_dataset = apply_time_window(val_dataset, start_idx, end_idx)
         test_dataset = apply_time_window(test_dataset, start_idx, end_idx)
@@ -29,45 +43,50 @@ def simple_classifier_pipeline(datapath, test_subject=8, classifier_type='svm'):
         val_dataset.std = train_std
         test_dataset.mean = train_mean
         test_dataset.std = train_std
-        
-        train_loader = DataLoader(train_dataset, batch_size=32, shuffle=False)  # shuffle=False для консистентности
+
+        train_loader = DataLoader(
+            train_dataset, batch_size=32, shuffle=False
+        )  # shuffle=False для консистентности
         val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
         test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
-        
+
         seq_length = end_idx - start_idx
         print(f"Длина последовательности: {seq_length}")
-        
+
         autoencoder = EEGAutoencoder(
-            input_channels=8,
-            seq_length=seq_length,
-            embedding_dim=12
+            input_channels=8, seq_length=seq_length, embedding_dim=12
         )
-        
+
         print("Предварительное обучение автоэнкодера...")
         train_losses, val_losses = train_autoencoder(
             autoencoder, train_loader, val_loader, num_epochs=50
         )
-        
+
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         autoencoder.to(device)
-        
+
         print("Извлечение признаков...")
         X_train, y_train = extract_features(autoencoder, train_loader, device)
         X_val, y_val = extract_features(autoencoder, val_loader, device)
         X_test, y_test = extract_features(autoencoder, test_loader, device)
-        
-        print(f"Размерности данных:")
+
+        print("Размерности данных:")
         print(f"Train: {X_train.shape}, Labels: {y_train.shape}")
         print(f"Val: {X_val.shape}, Labels: {y_val.shape}")
         print(f"Test: {X_test.shape}, Labels: {y_test.shape}")
-        
+
         from imblearn.over_sampling import SMOTE
+
         smote = SMOTE(random_state=42)
-        X_train_balanced, y_train_balanced = smote.fit_resample(X_train, y_train)
-        
-        print(f"После балансировки: {X_train_balanced.shape}, {y_train_balanced.shape}")
-        
-        if classifier_type == 'compare':
+        X_train_balanced, y_train_balanced = smote.fit_resample(
+            X_train, y_train
+        )
+
+        print(
+            f"После балансировки: {X_train_balanced.shape}, {y_train_balanced.shape}"
+        )
+
+        if classifier_type == "compare":
             best_classifier, results = compare_classifiers(
                 X_train_balanced, y_train_balanced, X_val, y_val
             )
@@ -75,73 +94,91 @@ def simple_classifier_pipeline(datapath, test_subject=8, classifier_type='svm'):
         else:
             simple_clf = SimpleEEGClassifier(classifier_type)
             classifier = simple_clf.fit(X_train_balanced, y_train_balanced)
-            
+
             print(f"\n=== ОЦЕНКА НА ВАЛИДАЦИИ ({classifier_type.upper()}) ===")
-            val_balanced_accuracy, val_preds = simple_clf.evaluate(X_val, y_val)
-        
-        print(f"\n=== ФИНАЛЬНАЯ ОЦЕНКА НА ТЕСТЕ ===")
-        if hasattr(classifier, 'predict'):
+            val_balanced_accuracy, val_preds = simple_clf.evaluate(
+                X_val, y_val
+            )
+
+        print("\n=== ФИНАЛЬНАЯ ОЦЕНКА НА ТЕСТЕ ===")
+        if hasattr(classifier, "predict"):
             y_test_pred = classifier.predict(X_test)
-            test_balanced_accuracy = balanced_accuracy_score(y_test, y_test_pred)
+            test_balanced_accuracy = balanced_accuracy_score(
+                y_test, y_test_pred
+            )
         else:
             test_accuracy = classifier.score(X_test, y_test)
-            test_balanced_accuracy = balanced_accuracy_score(y_test, y_test_pred)
-        
+            test_balanced_accuracy = balanced_accuracy_score(
+                y_test, y_test_pred
+            )
+
         print(f"Test Balanced Accuracy: {test_balanced_accuracy:.4f}")
         print(f"Test Balanced Accuracy: {test_balanced_accuracy*100:.2f}%")
-        
+
         visualize_embeddings(X_test, y_test, title="Тестовые эмбеддинги")
-        
+
         return {
-            'autoencoder': autoencoder,
-            'classifier': classifier,
-            'test_balanced_accuracy': test_balanced_accuracy,
-            'X_test': X_test,
-            'y_test': y_test
+            "autoencoder": autoencoder,
+            "classifier": classifier,
+            "test_balanced_accuracy": test_balanced_accuracy,
+            "X_test": X_test,
+            "y_test": y_test,
         }
-        
+
     except Exception as e:
         print(f"Ошибка в пайплайне: {e}")
         import traceback
+
         traceback.print_exc()
         return None
+
 
 def visualize_embeddings(embeddings, labels, title="Эмбеддинги"):
     """Визуализация эмбеддингов с помощью t-SNE"""
     tsne = TSNE(n_components=2, random_state=42, perplexity=30)
     embeddings_2d = tsne.fit_transform(embeddings)
-    
+
     plt.figure(figsize=(10, 8))
-    scatter = plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], 
-                         c=labels, cmap='viridis', alpha=0.7)
-    plt.colorbar(scatter, label='Класс')
-    plt.title(f'{title} (t-SNE)')
-    plt.xlabel('Компонента 1')
-    plt.ylabel('Компонента 2')
+    scatter = plt.scatter(
+        embeddings_2d[:, 0],
+        embeddings_2d[:, 1],
+        c=labels,
+        cmap="viridis",
+        alpha=0.7,
+    )
+    plt.colorbar(scatter, label="Класс")
+    plt.title(f"{title} (t-SNE)")
+    plt.xlabel("Компонента 1")
+    plt.ylabel("Компонента 2")
     plt.show()
-    
+
     return embeddings_2d
+
 
 def run_comparison(datapath, test_subject=8):
     """Сравнивает разные подходы"""
     print("=== СРАВНЕНИЕ КЛАССИФИКАТОРОВ ===")
-    
-    classifiers = ['svm', 'random_forest', 'logistic_regression', 'knn']
+
+    classifiers = ["svm", "random_forest", "logistic_regression", "knn"]
     results = {}
-    
+
     for clf_type in classifiers:
         print(f"\n{'='*50}")
         print(f"ТЕСТИРУЕМ: {clf_type.upper()}")
         print(f"{'='*50}")
-        
+
         result = simple_classifier_pipeline(datapath, test_subject, clf_type)
         if result is not None:
-            results[clf_type] = result['test_balanced_accuracy']
-    
+            results[clf_type] = result["test_balanced_accuracy"]
+
     print(f"\n{'='*60}")
     print("РЕЗУЛЬТАТЫ СРАВНЕНИЯ:")
     print(f"{'='*60}")
-    for clf_type, balanced_accuracy in sorted(results.items(), key=lambda x: x[1], reverse=True):
-        print(f"{clf_type:>20}: {balanced_accuracy:.4f} ({balanced_accuracy*100:.2f}%)")
-    
+    for clf_type, balanced_accuracy in sorted(
+        results.items(), key=lambda x: x[1], reverse=True
+    ):
+        print(
+            f"{clf_type:>20}: {balanced_accuracy:.4f} ({balanced_accuracy*100:.2f}%)"
+        )
+
     return results

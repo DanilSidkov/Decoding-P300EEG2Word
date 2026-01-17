@@ -1,6 +1,6 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from torch import nn
+
 
 class DeepConvNet(nn.Module):
     def __init__(self, input_channels=8, num_classes=2, seq_length=62):
@@ -84,53 +84,64 @@ class DeepConvNet(nn.Module):
         x = self.fc2(x)
         return x
 
+
 class EEGNet(nn.Module):
-    def __init__(self, input_channels=8, num_classes=2, seq_length=62, F1=8, D=2, F2=16, kernel_length1=32, kernel_length2=8, dropout_rate=0.5):
+    def __init__(
+        self,
+        input_channels=8,
+        num_classes=2,
+        seq_length=62,
+        F1=8,
+        D=2,
+        F2=16,
+        kernel_length1=32,
+        kernel_length2=8,
+        dropout_rate=0.5,
+    ):
         super(EEGNet, self).__init__()
-        
+
         self.conv1 = nn.Conv2d(
             in_channels=1,
             out_channels=F1,
             kernel_size=(1, kernel_length1),
             padding=(0, kernel_length1 // 2),
-            bias=False
+            bias=False,
         )
         self.bn1 = nn.BatchNorm2d(F1)
-        
+
         self.depthwise_conv = nn.Conv2d(
             in_channels=F1,
             out_channels=F1 * D,
             kernel_size=(input_channels, 1),
             groups=F1,
-            bias=False
+            bias=False,
         )
         self.bn2 = nn.BatchNorm2d(F1 * D)
         self.elu1 = nn.ELU()
         self.avg_pool1 = nn.AvgPool2d(kernel_size=(1, 4))
         self.dropout1 = nn.Dropout(dropout_rate)
-        
+
         self.separable_conv1 = nn.Conv2d(
             in_channels=F1 * D,
             out_channels=F1 * D,
             kernel_size=(1, kernel_length2),
             padding=(0, kernel_length2 // 2),
             groups=F1 * D,
-            bias=False
+            bias=False,
         )
         self.separable_conv2 = nn.Conv2d(
-            in_channels=F1 * D,
-            out_channels=F2,
-            kernel_size=1,
-            bias=False
+            in_channels=F1 * D, out_channels=F2, kernel_size=1, bias=False
         )
         self.bn3 = nn.BatchNorm2d(F2)
         self.elu2 = nn.ELU()
         self.avg_pool2 = nn.AvgPool2d(kernel_size=(1, 8))
         self.dropout2 = nn.Dropout(dropout_rate)
-        
+
         self.classifier = nn.Linear(
-            in_features=self._calculate_fc_size(input_channels, seq_length, F2),
-            out_features=num_classes
+            in_features=self._calculate_fc_size(
+                input_channels, seq_length, F2
+            ),
+            out_features=num_classes,
         )
 
     def _calculate_fc_size(self, input_channels, seq_length, F2):
@@ -142,28 +153,28 @@ class EEGNet(nn.Module):
     def _forward_features(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
-        
+
         x = self.depthwise_conv(x)
         x = self.bn2(x)
         x = self.elu1(x)
         x = self.avg_pool1(x)
         x = self.dropout1(x)
-        
+
         x = self.separable_conv1(x)
         x = self.separable_conv2(x)
         x = self.bn3(x)
         x = self.elu2(x)
         x = self.avg_pool2(x)
         x = self.dropout2(x)
-        
+
         return x
 
     def forward(self, x):
         # Добавляем измерение канала (B, C, T) -> (B, 1, C, T)
         x = x.unsqueeze(1)
-        
+
         x = self._forward_features(x)
-        
+
         x = x.view(x.size(0), -1)
         x = self.classifier(x)
         return x

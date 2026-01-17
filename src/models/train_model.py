@@ -1,24 +1,25 @@
 import torch
+import torch.nn.functional as F
 from torch import nn, optim
 from torch.utils.data import DataLoader
-import torch.nn.functional as F
 
 
 def print_model_parameters(model, model_name="Model"):
-    """
-    Красиво выводит информацию о параметрах модели
-    """
+    """Красиво выводит информацию о параметрах модели"""
     total_params = sum(p.numel() for p in model.parameters())
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    
+    trainable_params = sum(
+        p.numel() for p in model.parameters() if p.requires_grad
+    )
+
     print(f"=== Параметры модели {model_name} ===")
     print(f"Всего параметров: {total_params:,}")
     print(f"Обучаемых параметров: {trainable_params:,}")
     print(f"Необучаемых параметров: {total_params - trainable_params:,}")
     print(f"Размер модели: {total_params * 4 / (1024**2):.2f} MB (float32)")
     print("=" * 40)
-    
+
     return total_params, trainable_params
+
 
 class NeuroInformedEarlyStopping:
     """Ранняя остановка с учетом метрик BCI"""
@@ -36,45 +37,52 @@ class NeuroInformedEarlyStopping:
             self.epochs_no_improve = 0
         else:
             self.epochs_no_improve += 1
-            
+
         if epoch < self.min_epochs:
             return
-            
+
         if self.epochs_no_improve >= self.patience:
             self.early_stop = True
-            print(f"Early stopping triggered.")
+            print("Early stopping triggered.")
+
 
 class FocalLoss(nn.Module):
-    def __init__(self, weight=None, gamma=2.0, reduction='mean'):
+    def __init__(self, weight=None, gamma=2.0, reduction="mean"):
         super(FocalLoss, self).__init__()
         self.weight = weight
         self.gamma = gamma
         self.reduction = reduction
 
     def forward(self, inputs, targets):
-        ce_loss = F.cross_entropy(inputs, targets, weight=self.weight, reduction='none')
+        ce_loss = F.cross_entropy(
+            inputs, targets, weight=self.weight, reduction="none"
+        )
         pt = torch.softmax(inputs, dim=1)[range(len(targets)), targets]
         focal_loss = ((1 - pt) ** self.gamma) * ce_loss
-        
-        if self.reduction == 'mean':
+
+        if self.reduction == "mean":
             return focal_loss.mean()
-        elif self.reduction == 'sum':
+        elif self.reduction == "sum":
             return focal_loss.sum()
         else:
             return focal_loss
 
+
 def calculate_neuro_metrics(all_predictions, all_labels):
     """Специализированные метрики для BCI классификации"""
     from sklearn.metrics import (
-        accuracy_score,
+        balanced_accuracy_score,
         confusion_matrix,
         precision_recall_fscore_support,
         roc_auc_score,
-        balanced_accuracy_score
     )
 
     precision, recall, f1, _ = precision_recall_fscore_support(
-        all_labels, all_predictions, average=None, labels=[0, 1], zero_division=0
+        all_labels,
+        all_predictions,
+        average=None,
+        labels=[0, 1],
+        zero_division=0,
     )
 
     try:
@@ -134,39 +142,38 @@ def train_model(
     model = model.to(device)
     import numpy as np
     from sklearn.utils.class_weight import compute_class_weight
-    
+
     train_labels = train_loader.dataset.encoded_labels
-    
+
     unique_classes = np.unique(train_labels)
     print(f"Найдены классы в тренировочных данных: {unique_classes}")
-    
+
     if len(unique_classes) > 0:
         class_weights_array = compute_class_weight(
-            'balanced',
-            classes=unique_classes,
-            y=train_labels
+            "balanced", classes=unique_classes, y=train_labels
         )
-        class_weights = torch.tensor(class_weights_array, dtype=torch.float32).to(device)
+        class_weights = torch.tensor(
+            class_weights_array, dtype=torch.float32
+        ).to(device)
         print(f"Вычисленные веса классов: {class_weights}")
     else:
         class_weights = torch.tensor([1.0, 1.0]).to(device)
-        print("Предупреждение: используем веса по умолчанию") 
+        print("Предупреждение: используем веса по умолчанию")
 
-    
     criterion_ce = nn.CrossEntropyLoss(weight=class_weights)
     criterion_focal = FocalLoss(weight=class_weights, gamma=2.0)
-    
+
     optimizer = optim.AdamW(
-        model.parameters(), 
-        lr=0.001, 
+        model.parameters(),
+        lr=0.001,
         weight_decay=0.01,
         betas=(0.9, 0.999),
-        eps=1e-8
+        eps=1e-8,
     )
-    
+
     best_ac = 0.0
     best_model_state = None
-    
+
     accumulation_steps = 4
     steps_per_epoch = len(train_loader) // accumulation_steps
     if len(train_loader) % accumulation_steps != 0:
@@ -180,9 +187,9 @@ def train_model(
         total_steps=total_steps,
         pct_start=0.2,
         div_factor=5.0,
-        final_div_factor=50.0
+        final_div_factor=50.0,
     )
-    
+
     history = {
         "epoch": [],
         "train_loss": [],
@@ -214,11 +221,11 @@ def train_model(
             signals, labels = signals.to(device), labels.squeeze().to(device)
 
             outputs = model(signals)
-            
+
             loss_ce = criterion_ce(outputs, labels)
             loss_focal = criterion_focal(outputs, labels)
             loss = 0.7 * loss_ce + 0.3 * loss_focal
-            
+
             loss = loss / accumulation_steps
             loss.backward()
 
@@ -228,21 +235,18 @@ def train_model(
 
             if (i + 1) % accumulation_steps == 0:
                 total_norm = torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), 
-                    max_norm=1.0,
-                    error_if_nonfinite=True
+                    model.parameters(), max_norm=1.0, error_if_nonfinite=True
                 )
-                
+
                 optimizer.step()
                 optimizer.zero_grad()
                 scheduler.step()
-                
+
             train_loss += loss.item() * accumulation_steps
 
         if len(train_loader) % accumulation_steps != 0:
             total_norm = torch.nn.utils.clip_grad_norm_(
-                model.parameters(), 
-                max_norm=1.0
+                model.parameters(), max_norm=1.0
             )
             optimizer.step()
             optimizer.zero_grad()
@@ -254,9 +258,12 @@ def train_model(
 
         with torch.no_grad():
             for signals, labels in val_loader:
-                signals, labels = signals.to(device), labels.squeeze().to(device)
+                signals, labels = (
+                    signals.to(device),
+                    labels.squeeze().to(device),
+                )
                 outputs = model(signals)
-                
+
                 val_loss_ce = criterion_ce(outputs, labels)
                 val_loss_focal = criterion_focal(outputs, labels)
                 val_loss_combined = 0.7 * val_loss_ce + 0.3 * val_loss_focal
@@ -275,11 +282,11 @@ def train_model(
         if current_ac > best_ac:
             best_ac = current_ac
             best_model_state = {
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'balanced_accuracy': best_ac,
-                'metrics': metrics
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "balanced_accuracy": best_ac,
+                "metrics": metrics,
             }
 
         history["epoch"].append(epoch + 1)
@@ -289,22 +296,36 @@ def train_model(
         history["val_f1_target"].append(metrics["f1_target"])
         history["val_f1_nontarget"].append(metrics["f1_nontarget"])
         history["val_precision_target"].append(metrics["precision_target"])
-        history["val_precision_nontarget"].append(metrics["precision_nontarget"])
+        history["val_precision_nontarget"].append(
+            metrics["precision_nontarget"]
+        )
         history["val_recall_target"].append(metrics["recall_target"])
         history["val_recall_nontarget"].append(metrics["recall_nontarget"])
         history["learning_rate"].append(optimizer.param_groups[0]["lr"])
         history["ROC_AUC"].append(metrics["auc_roc"])
         history["specificity"].append(metrics["specificity"])
-        history["grad_norm"].append(total_norm.item() if 'total_norm' in locals() else 0.0)
+        history["grad_norm"].append(
+            total_norm.item() if "total_norm" in locals() else 0.0
+        )
 
         if (epoch + 1) % update_plot_every == 0:
             print(f"\nEpoch {epoch+1}/{num_epochs}")
-            print(f"Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
+            print(
+                f"Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}"
+            )
             print(f"Val Acc: {metrics['accuracy']:.4f}")
-            print(f"Target F1: {metrics['f1_target']:.4f} | Precision: {metrics['precision_target']:.4f} | Recall: {metrics['recall_target']:.4f}")
-            print(f"NonTarget F1: {metrics['f1_nontarget']:.4f} | Precision: {metrics['precision_nontarget']:.4f} | Recall: {metrics['recall_nontarget']:.4f}")
-            print(f"ROC AUC: {metrics['auc_roc']:.4f} | Specificity: {metrics['specificity']:.4f}")
-            print(f"LR: {optimizer.param_groups[0]['lr']:.2e} | Grad Norm: {history['grad_norm'][-1]:.4f}")
+            print(
+                f"Target F1: {metrics['f1_target']:.4f} | Precision: {metrics['precision_target']:.4f} | Recall: {metrics['recall_target']:.4f}"
+            )
+            print(
+                f"NonTarget F1: {metrics['f1_nontarget']:.4f} | Precision: {metrics['precision_nontarget']:.4f} | Recall: {metrics['recall_nontarget']:.4f}"
+            )
+            print(
+                f"ROC AUC: {metrics['auc_roc']:.4f} | Specificity: {metrics['specificity']:.4f}"
+            )
+            print(
+                f"LR: {optimizer.param_groups[0]['lr']:.2e} | Grad Norm: {history['grad_norm'][-1]:.4f}"
+            )
             print(f"Best Balanced Accuracy: {best_ac:.4f}")
             print("-" * 60)
 
@@ -314,13 +335,18 @@ def train_model(
             break
 
     if best_model_state is not None:
-        model.load_state_dict(best_model_state['model_state_dict'])
-        print(f"\nLoaded best model from epoch {best_model_state['epoch'] + 1} with Balanced Accuracy: {best_ac:.4f}")
+        model.load_state_dict(best_model_state["model_state_dict"])
+        print(
+            f"\nLoaded best model from epoch {best_model_state['epoch'] + 1} with Balanced Accuracy: {best_ac:.4f}"
+        )
 
     history["best_ac"] = best_ac
-    history["best_epoch"] = best_model_state['epoch'] if best_model_state else epoch
-    
+    history["best_epoch"] = (
+        best_model_state["epoch"] if best_model_state else epoch
+    )
+
     return history
+
 
 def test_model(
     model: nn.Module, test_loader: DataLoader
@@ -344,12 +370,9 @@ def test_model(
 
     """
     from sklearn.metrics import (
-        accuracy_score,
-        confusion_matrix,
-        precision_recall_fscore_support,
-        roc_auc_score,
-        balanced_accuracy_score
+        balanced_accuracy_score,
     )
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
     correct = 0

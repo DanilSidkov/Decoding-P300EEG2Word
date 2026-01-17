@@ -1,26 +1,25 @@
+import datetime
 import logging
 import logging.handlers
 from pathlib import Path
-import datetime
-from typing import Optional
 
 import colorlog
 
 
 class MicrosecondFormatter(colorlog.ColoredFormatter):
     """Кастомный форматтер с поддержкой микросекунд"""
-    
+
     def formatTime(self, record, datefmt=None):
-        """
-        Переопределяем метод formatTime для поддержки микросекунд
-        """
+        """Переопределяем метод formatTime для поддержки микросекунд"""
         ct = self.converter(record.created)
         if datefmt:
             if "%f" in datefmt:
                 # Используем datetime для микросекунд
                 dt = datetime.datetime.fromtimestamp(record.created)
                 # Заменяем %f на фактическое значение микросекунд
-                formatted = dt.strftime(datefmt.replace("%f", str(dt.microsecond).zfill(6)))
+                formatted = dt.strftime(
+                    datefmt.replace("%f", str(dt.microsecond).zfill(6))
+                )
                 return formatted
             else:
                 # Стандартное форматирование
@@ -68,17 +67,17 @@ def setup_logger(logger: logging.Logger, file_name: str = "logging") -> None:
 
     # File handler - создаем путь к .app/logs
     current_file_path = Path(__file__).resolve()
-    
+
     # Находим директорию .app (где находится get_logger.py)
     app_dir = current_file_path.parent
-    
+
     # Создаем путь к папке logs внутри .app
     logs_dir = app_dir / "logs"
     logs_dir.mkdir(exist_ok=True)  # Создаем папку, если её нет
-    
+
     log_file = logs_dir / f"{file_name}.log"
-    
-    f_handler = logging.FileHandler(log_file, encoding='utf-8')
+
+    f_handler = logging.FileHandler(log_file, encoding="utf-8")
     f_handler.setLevel(logging.DEBUG)
     f_handler.setFormatter(formatter)
     logger.addHandler(f_handler)

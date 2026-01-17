@@ -167,9 +167,7 @@ class EEGDataset(Dataset):
                 0, muscle_amplitude, signal.shape[1]
             )
 
-            b, a = butter(
-                3, [20 / 125, 60 / 125], btype="bandpass"
-            )
+            b, a = butter(3, [20 / 125, 60 / 125], btype="bandpass")
             high_freq_noise = filtfilt(b, a, high_freq_noise)
             augmented[muscle_channels] += high_freq_noise
 
