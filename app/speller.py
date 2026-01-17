@@ -3,7 +3,7 @@ import sys
 import threading
 import time
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 
 from pylsl import StreamInfo, StreamOutlet
 
@@ -17,11 +17,11 @@ class SSVEPSpellerExperiment:
         self.logger = logging.getLogger("BCI")
         setup_logger(self.logger, "Experiment")
 
+        # Технологичный дизайн
         self.root.attributes("-fullscreen", True)
-        self.root.configure(bg="white")
-
+        self.root.configure(bg="#0a0e17")
+        
         self.root.bind("<Escape>", self._exit_program)
-
         self.root.protocol("WM_DELETE_WINDOW", self._exit_program)
 
         self.codelen = 9
@@ -39,21 +39,40 @@ class SSVEPSpellerExperiment:
         self.target_symbols = []
         self.current_target_index = 0
 
-        self.waiting_for_space = False
-
         self.screen_width = self.root.winfo_screenwidth()
         self.screen_height = self.root.winfo_screenheight()
 
         self.controller = None
         info = StreamInfo(
             name="annotations",
-            type="Events",  # 'Markers'
+            type="Events",
             channel_count=1,
             nominal_srate=0,
             channel_format="string",
             source_id="my_marker_stream",
         )
         self.outlet = StreamOutlet(info)
+        
+        # Стиль для виджетов
+        self._setup_styles()
+
+    def _setup_styles(self):
+        """Настраивает стили для виджетов"""
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # Стиль для кнопок
+        style.configure("Tech.TButton",
+                       background="#1a2238",
+                       foreground="#ffffff",
+                       borderwidth=2,
+                       focusthickness=3,
+                       focuscolor="#3498db",
+                       font=("Segoe UI", 10, "bold"))
+        
+        style.map("Tech.TButton",
+                 background=[("active", "#2c3e50")],
+                 foreground=[("active", "#ffffff")])
 
     def _exit_program(self, event=None):
         """Закрытие программы"""
@@ -83,7 +102,6 @@ class SSVEPSpellerExperiment:
     def _show_welcome(self):
         """Показывает приветственное окно"""
         from app.welcome import WelcomeWindow
-
         self.send_event_marker("WINDOW_OPEN_hello", window="welcome")
         self.logger.info("Показ приветственного окна")
         WelcomeWindow(self._show_instructions, self.root)
@@ -91,7 +109,6 @@ class SSVEPSpellerExperiment:
     def _show_instructions(self):
         """Показывает окно инструкций"""
         from app.instructions import InstructionWindow
-
         self.send_event_marker("WINDOW_OPEN_instruct", window="instructions")
         self.logger.info("Показ окна инструкций")
         InstructionWindow(self._show_preparation, self.root)
@@ -102,114 +119,221 @@ class SSVEPSpellerExperiment:
         self.root.withdraw()
 
         self.prep_window = tk.Toplevel(self.root)
+        self.prep_window.title("BCI Speller - Настройки")
+        
+        # Технологичный дизайн
         self.prep_window.attributes("-fullscreen", True)
-        self.prep_window.configure(bg="white")
+        self.prep_window.configure(bg="#0a0e17")
+        
+        # Холст для фона
+        self.prep_canvas = tk.Canvas(self.prep_window, bg="#0a0e17", highlightthickness=0)
+        self.prep_canvas.pack(fill=tk.BOTH, expand=True)
+        
+        self._create_prep_background()
 
         self.prep_window.bind("<Escape>", lambda e: self._exit_program(e))
-        self.prep_window.protocol(
-            "WM_DELETE_WINDOW", lambda: self._exit_program()
-        )
+        self.prep_window.protocol("WM_DELETE_WINDOW", lambda: self._exit_program())
 
+        # Кнопка выхода
         exit_button = tk.Button(
-            self.prep_window,
+            self.prep_canvas,
             text="✕",
-            font=("Arial", 14, "bold"),
+            font=("Segoe UI", 14, "bold"),
             command=self._exit_program,
-            bg="#e74c3c",
-            fg="white",
+            bg="#0a0e17",
+            fg="#ffffff",
+            activebackground="#f53939",
+            activeforeground="#ffffff",
             relief="flat",
             width=3,
             height=1,
+            bd=0,
+            cursor="hand2"
         )
         exit_button.place(x=20, y=20)
+        self._create_glow_effect(exit_button)
 
         self.logger.info("Ввод данных")
 
-        center_frame = tk.Frame(self.prep_window, bg="white")
-        center_frame.place(relx=0.5, rely=0.5, anchor="center")
+        # Основной контейнер
+        main_container = tk.Frame(self.prep_canvas, bg="#0a0e17")
+        main_container.place(relx=0.5, rely=0.5, anchor="center", width=800, height=600)
 
+        # Заголовок
         tk.Label(
-            center_frame,
+            main_container,
             text="НАСТРОЙКИ ЭКСПЕРИМЕНТА",
-            font=("Arial", 18, "bold"),
-            bg="white",
-            fg="#2c3e50",
-        ).pack(pady=(0, 30))
+            font=("Segoe UI", 28, "bold"),
+            bg="#0a0e17",
+            fg="#ffffff",
+        ).pack(pady=(0, 40))
 
+        # Форма ввода
+        form_frame = tk.Frame(main_container, bg="#0a0e17")
+        form_frame.pack(pady=(0, 40))
+
+        # Поле ввода текста
+        input_group = tk.Frame(form_frame, bg="#0a0e17")
+        input_group.pack(pady=(0, 20), fill=tk.X)
+        
         tk.Label(
-            self.prep_window,
-            text="Текст для ввода:",
-            font=("Arial", 11),
-            bg="white",
-            fg="#34495e",
-        ).pack(in_=center_frame)
-
+            input_group,
+            text="ТЕКСТ ДЛЯ ВВОДА",
+            font=("Segoe UI", 12, "bold"),
+            bg="#0a0e17",
+            fg="#3498db",
+        ).pack(anchor="w", pady=(0, 5))
+        
         self.text_entry = tk.Entry(
-            self.prep_window, font=("Arial", 12), width=30
+            input_group,
+            font=("Consolas", 14),
+            bg="#1a2238",
+            fg="#ffffff",
+            insertbackground="#3498db",
+            relief="flat",
+            width=30
         )
         self.text_entry.insert(0, "ПРИВЕТ")
-        self.text_entry.pack(pady=(5, 15))
-
+        self.text_entry.pack(fill=tk.X, pady=(0, 10), ipady=8)
+        
+        # Горизонтальный раздел для параметров
+        params_frame = tk.Frame(form_frame, bg="#0a0e17")
+        params_frame.pack(fill=tk.X, pady=(0, 30))
+        
+        # Длительность цикла
+        duration_group = tk.Frame(params_frame, bg="#0a0e17")
+        duration_group.pack(side=tk.LEFT, padx=(0, 40))
+        
         tk.Label(
-            self.prep_window,
-            text="Длительность одного цикла (сек):",
-            font=("Arial", 11),
-            bg="white",
-            fg="#34495e",
-        ).pack(in_=center_frame)
-
+            duration_group,
+            text="ДЛИТЕЛЬНОСТЬ ЦИКЛА",
+            font=("Segoe UI", 11, "bold"),
+            bg="#0a0e17",
+            fg="#95a5a6",
+        ).pack(anchor="w", pady=(0, 5))
+        
         self.duration_entry = tk.Entry(
-            self.prep_window, font=("Arial", 12), width=10, justify="center"
+            duration_group,
+            font=("Consolas", 12),
+            bg="#1a2238",
+            fg="#ffffff",
+            insertbackground="#3498db",
+            relief="flat",
+            width=12,
+            justify="center"
         )
         self.duration_entry.insert(0, "0.5")
-        self.duration_entry.pack(pady=(5, 25))
-
+        self.duration_entry.pack(ipady=6)
+        
+        # Количество циклов
+        cycles_group = tk.Frame(params_frame, bg="#0a0e17")
+        cycles_group.pack(side=tk.LEFT, padx=(0, 40))
+        
         tk.Label(
-            self.prep_window,
-            text="Количество циклов мигания:",
-            font=("Arial", 11),
-            bg="white",
-            fg="#34495e",
-        ).pack(in_=center_frame)
-
+            cycles_group,
+            text="ЦИКЛОВ МИГАНИЯ",
+            font=("Segoe UI", 11, "bold"),
+            bg="#0a0e17",
+            fg="#95a5a6",
+        ).pack(anchor="w", pady=(0, 5))
+        
         self.cycles_entry = tk.Entry(
-            self.prep_window, font=("Arial", 12), width=10, justify="center"
+            cycles_group,
+            font=("Consolas", 12),
+            bg="#1a2238",
+            fg="#ffffff",
+            insertbackground="#3498db",
+            relief="flat",
+            width=12,
+            justify="center"
         )
-        self.cycles_entry.insert(0, "10")  # По умолчанию 10 циклов
-        self.cycles_entry.pack(pady=(5, 25))
-
+        self.cycles_entry.insert(0, "10")
+        self.cycles_entry.pack(ipady=6)
+        
+        # Длина кода
+        codelen_group = tk.Frame(params_frame, bg="#0a0e17")
+        codelen_group.pack(side=tk.LEFT)
+        
         tk.Label(
-            self.prep_window,
-            text="(1 цикл = N (длина кода) интервалов мигания)",
-            font=("Arial", 9),
-            bg="white",
-            fg="#7f8c8d",
-        ).pack(pady=(0, 10))
-
-        tk.Label(
-            self.prep_window,
-            text="Длина двоичного кода:",
-            font=("Arial", 11),
-            bg="white",
-            fg="#34495e",
-        ).pack(in_=center_frame)
-
+            codelen_group,
+            text="ДЛИНА КОДА",
+            font=("Segoe UI", 11, "bold"),
+            bg="#0a0e17",
+            fg="#95a5a6",
+        ).pack(anchor="w", pady=(0, 5))
+        
         self.codelen_entry = tk.Entry(
-            self.prep_window, font=("Arial", 12), width=10, justify="center"
+            codelen_group,
+            font=("Consolas", 12),
+            bg="#1a2238",
+            fg="#ffffff",
+            insertbackground="#3498db",
+            relief="flat",
+            width=12,
+            justify="center"
         )
-        self.codelen_entry.insert(0, "9")  # По умолчанию 9
-        self.codelen_entry.pack(pady=(5, 25))
+        self.codelen_entry.insert(0, "9")
+        self.codelen_entry.pack(ipady=6)
 
-        tk.Button(
-            self.prep_window,
-            text="НАЧАТЬ ЭКСПЕРИМЕНТ",
-            font=("Arial", 12, "bold"),
+        # Подсказка
+        hint_label = tk.Label(
+            form_frame,
+            text="1 цикл = N (длина кода) интервалов мигания",
+            font=("Segoe UI", 10),
+            bg="#0a0e17",
+            fg="#7f8c8d",
+        )
+        hint_label.pack(pady=(10, 0))
+
+        # Кнопка запуска
+        button_frame = tk.Frame(main_container, bg="#0a0e17")
+        button_frame.pack()
+        
+        start_button = tk.Button(
+            button_frame,
+            text="🚀 НАЧАТЬ ЭКСПЕРИМЕНТ",
+            font=("Segoe UI", 14, "bold"),
             command=self._start_experiment,
-            bg="#27ae60",
-            fg="white",
-            width=20,
+            bg="#0a0e17",
+            fg="#ffffff",
+            activebackground="#2ecc71",
+            activeforeground="#ffffff",
+            relief="flat",
+            width=25,
             height=2,
-        ).pack(in_=center_frame)
+            bd=2,
+            highlightthickness=2,
+            highlightbackground="#2ecc71",
+            highlightcolor="#2ecc71",
+            cursor="hand2"
+        )
+        start_button.pack()
+        self._create_glow_effect(start_button, "#2ecc71")
+
+    def _create_prep_background(self):
+        """Создает фоновые эффекты для окна подготовки"""
+        width = self.prep_window.winfo_screenwidth()
+        height = self.prep_window.winfo_screenheight()
+        
+        # Сетка
+        for x in range(0, width, 60):
+            self.prep_canvas.create_line(x, 0, x, height, fill="#1a2238", width=1, dash=(3, 6))
+        
+        for y in range(0, height, 60):
+            self.prep_canvas.create_line(0, y, width, y, fill="#1a2238", width=1, dash=(3, 6))
+
+    def _create_glow_effect(self, widget, color="#3498db"):
+        """Создает эффект свечения для виджета"""
+        def on_enter(e):
+            widget.config(highlightbackground=color, highlightcolor=color)
+            
+        def on_leave(e):
+            r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+            darker = f'#{max(0, r-30):02x}{max(0, g-30):02x}{max(0, b-30):02x}'
+            widget.config(highlightbackground=darker, highlightcolor=darker)
+            
+        widget.bind("<Enter>", on_enter)
+        widget.bind("<Leave>", on_leave)
 
     def _start_experiment(self):
         """Начинает эксперимент"""
@@ -252,9 +376,7 @@ class SSVEPSpellerExperiment:
             )
 
             self.prep_window.destroy()
-
             self._setup_main_ui()
-
             self._show_next_target()
 
         except ValueError as e:
@@ -264,240 +386,309 @@ class SSVEPSpellerExperiment:
     def _setup_main_ui(self):
         """Настраивает главное окно (скрытое)"""
         self.root.deiconify()
-        self.root.attributes("-fullscreen", True)
+        self.root.title("BCI Speller - Эксперимент")
+        
+        # Холст для фона
+        self.main_canvas = tk.Canvas(self.root, bg="#0a0e17", highlightthickness=0)
+        self.main_canvas.pack(fill=tk.BOTH, expand=True)
+        
+        self._create_main_background()
 
+        # Кнопка выхода
         exit_button = tk.Button(
-            self.root,
-            text="✕ ВЫЙТИ",
-            font=("Arial", 12, "bold"),
+            self.main_canvas,
+            text="✕",
+            font=("Segoe UI", 14, "bold"),
             command=self._exit_program,
-            bg="#e74c3c",
-            fg="white",
+            bg="#0a0e17",
+            fg="#ffffff",
+            activebackground="#f53939",
+            activeforeground="#ffffff",
             relief="flat",
-            padx=20,
-            pady=10,
+            width=3,
+            height=1,
+            bd=0,
+            cursor="hand2"
         )
         exit_button.place(x=20, y=20)
+        self._create_glow_effect(exit_button)
 
-        window_width = int(self.screen_width * 0.9)
-        window_height = int(self.screen_height * 0.9)
-
-        self.root.title("SSVEP BCI Эксперимент")
-        self.root.configure(bg="white")
-
+        # Основной контейнер
         main_container = tk.PanedWindow(
-            self.root, orient=tk.VERTICAL, bg="white", sashwidth=5
+            self.main_canvas,
+            orient=tk.VERTICAL,
+            bg="#0a0e17",
+            sashwidth=5,
+            sashrelief="flat",
+            sashpad=3,
+            opaqueresize=False
         )
-        main_container.pack(fill=tk.BOTH, expand=True)
+        main_container.place(relx=0.5, rely=0.5, anchor="center", 
+                           width=self.screen_width*0.9, height=self.screen_height*0.9)
 
-        top_frame = tk.Frame(main_container, bg="white")
-        main_container.add(top_frame, height=int(window_height * 0.8))
+        # Верхняя панель (80%)
+        top_frame = tk.Frame(main_container, bg="#0a0e17")
+        main_container.add(top_frame, height=int(self.screen_height * 0.9 * 0.8))
 
-        top_paned = tk.PanedWindow(
-            top_frame, orient=tk.VERTICAL, bg="white", sashwidth=3
+        # Панель информации
+        info_frame = tk.Frame(top_frame, bg="#0a0e17")
+        info_frame.pack(fill=tk.X, padx=20, pady=(20, 10))
+
+        # Индикатор статуса
+        status_group = tk.Frame(info_frame, bg="#0a0e17")
+        status_group.pack(side=tk.LEFT)
+
+        self.status_light = tk.Canvas(status_group, width=20, height=20, 
+                                     bg="#0a0e17", highlightthickness=0)
+        self.status_light.pack(side=tk.LEFT, padx=(0, 10))
+        self.status_indicator = self.status_light.create_oval(2, 2, 18, 18, 
+                                                            fill="#7f8c8d", outline="")
+
+        self.status_label = tk.Label(
+            status_group,
+            text="Готов к началу эксперимента",
+            font=("Segoe UI", 12, "bold"),
+            bg="#0a0e17",
+            fg="#ffffff",
         )
-        top_paned.pack(fill=tk.BOTH, expand=True)
+        self.status_label.pack(side=tk.LEFT)
 
-        info_frame = tk.Frame(top_paned, bg="white")
-        top_paned.add(info_frame, height=int(window_height * 0.8 * 0.1))
-
-        self.current_symbol_label = tk.Label(
-            info_frame,
-            text="Ожидание целевого символа...",
-            font=("Arial", 12),
-            bg="white",
-            fg="#333333",
-        )
-        self.current_symbol_label.pack(side=tk.LEFT, padx=20)
-
-        self.experiment_progress = tk.Label(
-            info_frame, text="", font=("Arial", 11), bg="white", fg="#7f8c8d"
-        )
-        self.experiment_progress.pack(side=tk.LEFT, padx=20)
+        # Индикатор мигания
+        flash_group = tk.Frame(info_frame, bg="#0a0e17")
+        flash_group.pack(side=tk.RIGHT)
 
         self.flash_indicator = tk.Label(
-            info_frame, text="○", font=("Arial", 14), bg="white", fg="#95a5a6"
+            flash_group,
+            text="○",
+            font=("Segoe UI", 16),
+            bg="#0a0e17",
+            fg="#7f8c8d",
         )
-        self.flash_indicator.pack(side=tk.RIGHT, padx=20)
+        self.flash_indicator.pack(side=tk.LEFT, padx=(0, 5))
 
-        grid_container = tk.Frame(top_paned, bg="white")
-        top_paned.add(grid_container, height=int(window_height * 0.8 * 0.9))
+        tk.Label(
+            flash_group,
+            text="МИГАНИЕ",
+            font=("Segoe UI", 11),
+            bg="#0a0e17",
+            fg="#95a5a6",
+        ).pack(side=tk.LEFT)
+
+        # Панель прогресса
+        progress_frame = tk.Frame(top_frame, bg="#0a0e17")
+        progress_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+
+        self.current_symbol_label = tk.Label(
+            progress_frame,
+            text="Ожидание целевого символа...",
+            font=("Segoe UI", 14),
+            bg="#0a0e17",
+            fg="#3498db",
+        )
+        self.current_symbol_label.pack(anchor="w", pady=(0, 5))
+
+        # Прогресс-бар эксперимента
+        progress_bar_frame = tk.Frame(progress_frame, bg="#0a0e17")
+        progress_bar_frame.pack(fill=tk.X, pady=(0, 10))
+
+        self.experiment_progress = tk.Label(
+            progress_bar_frame,
+            text="Прогресс: 0/0",
+            font=("Segoe UI", 11),
+            bg="#0a0e17",
+            fg="#95a5a6",
+        )
+        self.experiment_progress.pack(side=tk.LEFT)
+
+        # Сетка символов - ТОЛЬКО СИМВОЛЫ
+        grid_container = tk.Frame(top_frame, bg="#0a0e17")
+        grid_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
 
         self._create_symbol_grid(grid_container)
 
-        bottom_frame = tk.Frame(main_container, bg="white")
-        main_container.add(bottom_frame, height=int(window_height * 0.2))
+        # Нижняя панель (20%)
+        bottom_frame = tk.Frame(main_container, bg="#0a0e17")
+        main_container.add(bottom_frame, height=int(self.screen_height * 0.9 * 0.2))
 
         bottom_paned = tk.PanedWindow(
-            bottom_frame, orient=tk.HORIZONTAL, bg="white", sashwidth=3
+            bottom_frame,
+            orient=tk.HORIZONTAL,
+            bg="#0a0e17",
+            sashwidth=3,
+            sashrelief="flat",
+            opaqueresize=False
         )
         bottom_paned.pack(fill=tk.BOTH, expand=True)
 
-        left_bottom_frame = tk.Frame(bottom_paned, bg="white")
-        bottom_paned.add(left_bottom_frame, width=int(window_width * 0.4))
+        # Левая панель (параметры)
+        left_bottom_frame = tk.Frame(bottom_paned, bg="#1a2238")
+        bottom_paned.add(left_bottom_frame, width=int(self.screen_width * 0.9 * 0.4))
 
+        # Заголовок параметров
         tk.Label(
             left_bottom_frame,
             text="ПАРАМЕТРЫ ЭКСПЕРИМЕНТА",
-            font=("Arial", 10, "bold"),
-            bg="white",
-            fg="#2c3e50",
-        ).pack(anchor="w", padx=20, pady=(15, 5))
+            font=("Segoe UI", 12, "bold"),
+            bg="#1a2238",
+            fg="#3498db",
+        ).pack(anchor="w", padx=20, pady=(15, 10))
 
+        # Настройки
         self.settings_label = tk.Label(
             left_bottom_frame,
             text=f"Длительность цикла: {self.cycle_duration} сек | Циклов: {self.num_cycles}",
-            font=("Arial", 9),
-            bg="white",
-            fg="#7f8c8d",
+            font=("Segoe UI", 10),
+            bg="#1a2238",
+            fg="#95a5a6",
         )
         self.settings_label.pack(anchor="w", padx=20, pady=(0, 5))
 
+        # Прогресс мигания
         self.progress_label = tk.Label(
             left_bottom_frame,
             text=f"Цикл: 0/{self.num_cycles} | Интервал: 0/{self.codelen}",
-            font=("Arial", 10),
-            bg="white",
-            fg="#3498db",
+            font=("Segoe UI", 11, "bold"),
+            bg="#1a2238",
+            fg="#2ecc71",
         )
-        self.progress_label.pack(anchor="w", padx=20, pady=(10, 5))
+        self.progress_label.pack(anchor="w", padx=20, pady=(5, 5))
 
-        self.status_label = tk.Label(
-            left_bottom_frame,
-            text="Готов к началу эксперимента",
-            font=("Arial", 10),
-            bg="white",
-            fg="#666666",
-        )
-        self.status_label.pack(anchor="w", padx=20, pady=(5, 0))
+        # Правая панель (результаты)
+        right_bottom_frame = tk.Frame(bottom_paned, bg="#1a2238")
+        bottom_paned.add(right_bottom_frame, width=int(self.screen_width * 0.9 * 0.6))
 
-        right_bottom_frame = tk.Frame(bottom_paned, bg="white")
-        bottom_paned.add(right_bottom_frame, width=int(window_width * 0.6))
-
+        # Заголовок результатов
         tk.Label(
             right_bottom_frame,
             text="РЕЗУЛЬТАТ ВВОДА",
-            font=("Arial", 10, "bold"),
-            bg="white",
-            fg="#2c3e50",
-        ).pack(anchor="w", padx=20, pady=(15, 5))
+            font=("Segoe UI", 12, "bold"),
+            bg="#1a2238",
+            fg="#3498db",
+        ).pack(anchor="w", padx=20, pady=(15, 10))
 
-        text_container = tk.Frame(right_bottom_frame, bg="white")
+        # Текстовое поле для результатов
+        text_container = tk.Frame(right_bottom_frame, bg="#1a2238")
         text_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 15))
 
-        scrollbar = tk.Scrollbar(text_container)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        # Кастомный скроллбар
+        style = ttk.Style()
+        style.configure("Results.Vertical.TScrollbar", 
+                       background="#2c3e50",
+                       troughcolor="#1a2238",
+                       bordercolor="#1a2238",
+                       arrowcolor="#3498db",
+                       relief="flat")
 
         self.text_display = tk.Text(
             text_container,
-            font=("Arial", 12),
+            font=("Consolas", 14),
             height=3,
             wrap=tk.WORD,
-            yscrollcommand=scrollbar.set,
-            bg="#f8f9fa",
-            fg="#2c3e50",
-            relief="solid",
-            bd=1,
+            bg="#0a0e17",
+            fg="#ffffff",
+            insertbackground="#3498db",
+            selectbackground="#3498db",
+            selectforeground="#ffffff",
+            relief="flat",
+            bd=2,
+            highlightthickness=1,
+            highlightbackground="#2c3e50",
+            highlightcolor="#2c3e50",
+            padx=15,
+            pady=10
         )
-        self.text_display.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.config(command=self.text_display.yview)
 
-        self.root.update_idletasks()
-        x = (self.screen_width - window_width) // 2
-        y = (self.screen_height - window_height) // 2
-        self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        scrollbar = ttk.Scrollbar(text_container, orient="vertical", 
+                                 command=self.text_display.yview,
+                                 style="Results.Vertical.TScrollbar")
+        self.text_display.configure(yscrollcommand=scrollbar.set)
+
+        self.text_display.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    def _create_main_background(self):
+        """Создает фоновые эффекты для главного окна"""
+        width = self.screen_width
+        height = self.screen_height
+        
+        # Динамические линии
+        for i in range(10):
+            x1 = width // 10 * i
+            y1 = 0
+            x2 = width // 10 * (10 - i)
+            y2 = height
+            self.main_canvas.create_line(x1, y1, x2, y2, fill="#1a2238", width=1)
 
     def _create_symbol_grid(self, parent):
-        """Создает сетку символов"""
-        self.grid_frame = tk.Frame(parent, bg="white")
-        self.grid_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        """Создает сетку СИМВОЛОВ (без плиток/карточек)"""
+        self.grid_frame = tk.Frame(parent, bg="#0a0e17")
+        self.grid_frame.pack(fill=tk.BOTH, expand=True)
 
         rows = 3
         cols = 12
 
         for i in range(rows):
-            self.grid_frame.grid_rowconfigure(i, weight=1)
+            self.grid_frame.grid_rowconfigure(i, weight=1, uniform="row")
         for j in range(cols):
-            self.grid_frame.grid_columnconfigure(j, weight=1)
+            self.grid_frame.grid_columnconfigure(j, weight=1, uniform="col")
 
         self.labels = []
+        
         for i, symbol in enumerate(self.symbols):
             row = i // cols
             col = i % cols
 
+            # СОЗДАЕМ ТОЛЬКО ЛЕЙБЛЫ С СИМВОЛАМИ (без фреймов)
             label = tk.Label(
                 self.grid_frame,
                 text=symbol,
-                font=("Arial", 20, "bold"),
-                bg="white",
-                fg="#999999",
+                font=("Segoe UI", 22, "bold"),  # Увеличим размер шрифта
+                bg="#0a0e17",  # Прозрачный фон
+                fg="#7f8c8d",  # Серый цвет по умолчанию
                 width=3,
                 height=1,
-                relief="flat",
-                bd=2,
             )
-            label.grid(row=row, column=col, padx=2, pady=2, sticky="nsew")
+            label.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
             self.labels.append(label)
+            
+            # Эффект при наведении (опционально)
+            def on_enter(e, l=label, s=symbol):
+                if self.target_symbol == s and self.is_running:
+                    l.config(fg="#ffffff")  # Белый при мигании цели
+                elif not self.is_running:
+                    l.config(fg="#95a5a6")  # Светло-серый при наведении
+                    
+            def on_leave(e, l=label, s=symbol):
+                if self.target_symbol == s and self.is_running:
+                    l.config(fg="#f53939")  # Красный для целевого символа
+                elif not self.is_running:
+                    l.config(fg="#7f8c8d")  # Темно-серый по умолчанию
+                else:
+                    l.config(fg="#7f8c8d")
+            
+            label.bind("<Enter>", on_enter)
+            label.bind("<Leave>", on_leave)
 
     def setup_symbols(self):
         """Настройка символов"""
         CG = CodeGen(self.codelen)
-
-        # Символы в алфавитном порядке (из config.py)
         symbols_alphabetical = CG.alphabet
-
-        # Новый порядок символов как на клавиатуре
+        
         keyboard_order = [
-            "Й",
-            "Ц",
-            "У",
-            "К",
-            "Е",
-            "Н",
-            "Г",
-            "Ш",
-            "Щ",
-            "З",
-            "Х",
-            "Ъ",
-            "Ф",
-            "Ы",
-            "В",
-            "А",
-            "П",
-            "Р",
-            "О",
-            "Л",
-            "Д",
-            "Ж",
-            "Э",
-            "Ё",
-            "Я",
-            "Ч",
-            "С",
-            "М",
-            "И",
-            "Т",
-            "Ь",
-            "Б",
-            "Ю",
-            ",",
-            ".",
-            "_",
+            "Й", "Ц", "У", "К", "Е", "Н", "Г", "Ш", "Щ", "З", "Х", "Ъ",
+            "Ф", "Ы", "В", "А", "П", "Р", "О", "Л", "Д", "Ж", "Э", "Ё",
+            "Я", "Ч", "С", "М", "И", "Т", "Ь", "Б", "Ю", ",", ".", "_"
         ]
 
-        # Проверяем, что все символы из keyboard_order есть в symbols_alphabetical
         if set(keyboard_order) != set(symbols_alphabetical):
             raise ValueError(
                 "Набор символов в keyboard_order не совпадает с symbols_alphabetical"
             )
-        # Создаем список индексов для нового порядка
+        
         self.symbol_indices = [
             symbols_alphabetical.index(sym) for sym in keyboard_order
         ]
-        # Сохраняем символы в порядке клавиатуры
         self.symbols = keyboard_order
-        # Переупорядочиваем паттерны в соответствии с новым порядком символов
         self.patterns = [CG.patterns[i] for i in self.symbol_indices]
 
     def _show_next_target(self):
@@ -512,26 +703,29 @@ class SSVEPSpellerExperiment:
                 total=len(self.target_symbols),
             )
 
+            # Обновляем индикатор статуса
+            self.status_light.itemconfig(self.status_indicator, fill="#f39c12")
+            self.status_label.config(
+                text=f"Целевой символ: '{self.target_symbol}' ({self.current_target_index + 1}/{len(self.target_symbols)})",
+                fg="#f39c12"
+            )
+            
             self.current_symbol_label.config(
-                text=f"Текущий символ: '{self.target_symbol}' ({self.current_target_index + 1}/{len(self.target_symbols)})"
+                text=f"СИМВОЛ: '{self.target_symbol}' • ПОЗИЦИЯ: {self.current_target_index + 1}/{len(self.target_symbols)}"
+            )
+            
+            self.experiment_progress.config(
+                text=f"Прогресс: {self.current_target_index}/{len(self.target_symbols)}"
             )
 
             from app.target_window import TargetWindow
-
-            target_win = TargetWindow(
-                self.root, self.target_symbol, self._on_target_confirmed
-            )
-
-            self.status_label.config(
-                text="Смотрите на целевой символ и нажмите ПРОБЕЛ",
-                fg="#f39c12",
-            )
+            target_win = TargetWindow(self.root, self.target_symbol, self._on_target_confirmed)
 
         else:
             self._finish_experiment()
 
     def _on_target_confirmed(self):
-        """Вызывается после подтверждения целевого символа (нажатия пробела)"""
+        """Вызывается после подтверждения целевого символа"""
         self.send_event_marker(
             "TARGET_CONFIRMED",
             symbol=self.target_symbol,
@@ -539,8 +733,11 @@ class SSVEPSpellerExperiment:
         )
         self.root.deiconify()
 
+        # Обновляем индикатор статуса
+        self.status_light.itemconfig(self.status_indicator, fill="#f53939")
         self.status_label.config(
-            text="Мигание... Смотрите на целевой символ", fg="#e74c3c"
+            text="Мигание... Смотрите на целевой символ",
+            fg="#f53939"
         )
 
         self._start_flashing()
@@ -560,11 +757,22 @@ class SSVEPSpellerExperiment:
             self.current_cycle = 0
 
             self._update_progress_display()
+            self._highlight_target_symbol()
 
             self.flash_thread = threading.Thread(
                 target=self._flash_sequence, daemon=True
             )
             self.flash_thread.start()
+
+    def _highlight_target_symbol(self):
+        """Подсвечивает целевой символ в сетке (ТОЛЬКО ЦВЕТ ТЕКСТА)"""
+        target_index = self.symbols.index(self.target_symbol) if self.target_symbol in self.symbols else -1
+        if target_index != -1:
+            for i, label in enumerate(self.labels):
+                if i == target_index:
+                    label.config(fg="#f53939")  # Красный для целевого символа
+                else:
+                    label.config(fg="#7f8c8d")  # Серый для остальных
 
     def _update_progress_display(self):
         """Обновляет отображение прогресса мигания"""
@@ -574,12 +782,12 @@ class SSVEPSpellerExperiment:
         
         # Обновляем индикатор мигания
         if self.is_running:
-            self.flash_indicator.config(text="●", fg="#e74c3c")  # Красный - мигание активно
+            self.flash_indicator.config(text="●", fg="#f53939")
         else:
-            self.flash_indicator.config(text="○", fg="#95a5a6")  # Серый - мигание неактивно
+            self.flash_indicator.config(text="○", fg="#7f8c8d")
 
     def _flash_sequence(self):
-        """Выполняет последовательность мигания с маркерами"""
+        """Выполняет последовательность мигания с маркерами - ТОЛЬКО ЦВЕТ ТЕКСТА"""
         for cycle in range(self.num_cycles):
             if not self.is_running:
                 break
@@ -627,23 +835,33 @@ class SSVEPSpellerExperiment:
                     else 0,
                 )
 
-                # Фаза 1: Основное состояние
+                # Фаза 1: Основное состояние - МЕНЯЕМ ТОЛЬКО ЦВЕТ ТЕКСТА
                 for i, label in enumerate(self.labels):
                     if i < len(self.patterns):
                         if self.patterns[i][interval] == 1:
-                            label.config(fg="#000000")  # Черный
+                            # Активное мигание - яркий цвет
+                            if i == target_index:
+                                label.config(fg="#f53939")  # Белый для целевого
+                            else:
+                                label.config(fg="#ffffff")  # Белый для остальных
                         else:
-                            label.config(fg="#999999")  # Серый
+                            # Неактивное мигание
+                            if i == target_index:
+                                label.config(fg="#37130f")  # Красный для целевого
+                            else:
+                                label.config(fg="#7f8c8d")  # Серый для остальных
 
                 time.sleep(self.base_interval * 0.9)
 
-                # Фаза 2: Кратковременное отключение
+                # Фаза 2: Кратковременное отключение - МЕНЯЕМ ТОЛЬКО ЦВЕТ ТЕКСТА
                 if self.is_running:
-                    for label in self.labels:
-                        label.config(fg="#999999")
+                    for i, label in enumerate(self.labels):
+                        if i == target_index:
+                            label.config(fg="#37130f")  # Красный для целевого
+                        else:
+                            label.config(fg="#7f8c8d")  # Серый для остальных
                     time.sleep(self.base_interval * 0.1)
 
-            # Маркер конца цикла
             self.send_event_marker(
                 "CYCLE_END",
                 cycle=cycle + 1,
@@ -658,14 +876,14 @@ class SSVEPSpellerExperiment:
     def _finish_symbol(self):
         """Завершает ввод текущего символа"""
         self.is_running = False
-
         self.current_cycle = 0
         self.current_interval = 0
 
         self._update_progress_display()
 
+        # Сбрасываем цвета всех символов (ТОЛЬКО ЦВЕТ ТЕКСТА)
         for label in self.labels:
-            label.config(fg="#999999")
+            label.config(fg="#7f8c8d")  # Все символы серые
 
         self.output_text += self.target_symbol
 
@@ -675,17 +893,19 @@ class SSVEPSpellerExperiment:
             output_text=self.output_text,
             index=self.current_target_index,
         )
+        
+        # Обновляем индикатор статуса
+        self.status_light.itemconfig(self.status_indicator, fill="#2ecc71")
+        self.status_label.config(
+            text=f"Символ '{self.target_symbol}' добавлен",
+            fg="#2ecc71"
+        )
+
         self.text_display.delete(1.0, tk.END)
         self.text_display.insert(1.0, self.output_text)
         self.text_display.see(tk.END)
 
         self.current_target_index += 1
-
-        self.status_label.config(
-            text="Символ добавлен. Переход к следующему...", fg="#27ae60"
-        )
-
-        self.root.withdraw()
 
         self.root.after(1000, self._show_next_target)
 
@@ -696,16 +916,84 @@ class SSVEPSpellerExperiment:
             final_text=self.output_text,
             total_symbols=len(self.target_symbols),
         )
-        self.status_label.config(text="Эксперимент завершен!", fg="#27ae60")
-        self.progress_label.config(text="Завершено")
+        
+        # Обновляем индикатор статуса
+        self.status_light.itemconfig(self.status_indicator, fill="#2ecc71")
+        self.status_label.config(text="Эксперимент завершен!", fg="#2ecc71")
+        self.progress_label.config(text="Завершено", fg="#2ecc71")
 
-        # Показываем сообщение
-        messagebox.showinfo(
-            "Эксперимент завершен",
-            f"Поздравляем! Вы успешно завершили эксперимент.\n\n"
-            f"Введенный текст: {self.output_text}\n"
-            f"Параметры: {self.num_cycles} циклов по {self.cycle_duration} сек каждый",
+        # Стилизованное сообщение о завершении
+        from tkinter import Toplevel
+        result_window = Toplevel(self.root)
+        result_window.title("Эксперимент завершен")
+        result_window.configure(bg="#0a0e17")
+        result_window.geometry("600x400")
+        result_window.resizable(False, False)
+        
+        # Центрируем окно
+        x = (self.screen_width - 600) // 2
+        y = (self.screen_height - 400) // 2
+        result_window.geometry(f"600x400+{x}+{y}")
+        
+        # Содержимое
+        canvas = tk.Canvas(result_window, bg="#0a0e17", highlightthickness=0)
+        canvas.pack(fill=tk.BOTH, expand=True)
+        
+        # Иконка успеха
+        tk.Label(
+            canvas,
+            text="✓",
+            font=("Segoe UI", 72),
+            bg="#0a0e17",
+            fg="#2ecc71",
+        ).place(relx=0.5, rely=0.3, anchor="center")
+        
+        # Заголовок
+        tk.Label(
+            canvas,
+            text="ЭКСПЕРИМЕНТ ЗАВЕРШЁН",
+            font=("Segoe UI", 24, "bold"),
+            bg="#0a0e17",
+            fg="#ffffff",
+        ).place(relx=0.5, rely=0.5, anchor="center")
+        
+        # Результат
+        tk.Label(
+            canvas,
+            text=f"Введённый текст: {self.output_text}",
+            font=("Consolas", 14),
+            bg="#0a0e17",
+            fg="#3498db",
+        ).place(relx=0.5, rely=0.6, anchor="center")
+        
+        # Параметры
+        tk.Label(
+            canvas,
+            text=f"Параметры: {self.num_cycles} циклов × {self.cycle_duration} сек",
+            font=("Segoe UI", 12),
+            bg="#0a0e17",
+            fg="#95a5a6",
+        ).place(relx=0.5, rely=0.7, anchor="center")
+        
+        # Кнопка закрытия
+        close_button = tk.Button(
+            canvas,
+            text="ЗАКРЫТЬ",
+            font=("Segoe UI", 12, "bold"),
+            command=lambda: [result_window.destroy(), self.root.quit()],
+            bg="#0a0e17",
+            fg="#ffffff",
+            activebackground="#f53939",
+            activeforeground="#ffffff",
+            relief="flat",
+            width=15,
+            height=1,
+            bd=2,
+            highlightthickness=2,
+            highlightbackground="#f53939",
+            highlightcolor="#f53939",
+            cursor="hand2"
         )
-
-        # Закрываем приложение
-        self.root.quit()
+        close_button.place(relx=0.5, rely=0.85, anchor="center")
+        
+        result_window.focus_force()
