@@ -1,5 +1,5 @@
 import tkinter as tk
-#from app.lsl_markers import LSLMarkerService
+import sys
 
 class TargetWindow:
     """Окно для отображения целевого символа"""
@@ -12,57 +12,56 @@ class TargetWindow:
         """
         self.on_start_callback = on_start_callback
         self.symbol = symbol
+        self.parent = parent
         
         if self.symbol == ' ':
             self.symbol = '_'
-        #self.lsl_service = LSLMarkerService()
-        #self.lsl_service.send_marker("TARGET_WINDOW_OPEN")#, symbol=symbol)
-        # Получаем размеры экрана
-        screen_width = parent.winfo_screenwidth()
-        screen_height = parent.winfo_screenheight()
-        
-        # Создаем большое окно (40% экрана)
-        window_width = int(screen_width * 0.4)
-        window_height = int(screen_height * 0.4)
         
         self.window = tk.Toplevel(parent)
-        self.window.title(f"Целевой символ")
-        self.window.geometry(f"{window_width}x{window_height}")
+
+        self.window.attributes('-fullscreen', True)
         self.window.configure(bg='white')
-        self.window.resizable(False, False)
         
-        # Делаем окно поверх всех
-        self.window.attributes('-topmost', True)
+        self.window.bind('<Escape>', self._exit_program)
+        self.window.protocol("WM_DELETE_WINDOW", self._exit_program)
+
+        exit_button = tk.Button(
+            self.window,
+            text="✕ ВЫЙТИ",
+            font=('Arial', 12, 'bold'),
+            command=self._exit_program,
+            bg='#e74c3c',
+            fg='white',
+            relief='flat',
+            padx=20,
+            pady=10
+        )
+        exit_button.place(x=20, y=20)
         
-        # Привязываем пробел
         self.window.bind('<space>', self._on_space_pressed)
         
-        # Отключаем кнопку закрытия
-        self.window.protocol("WM_DELETE_WINDOW", lambda: None)
-        
-        # Создаем содержимое
-        self._create_content()
-        
-        # Центрируем окно
-        self._center_window(window_width, window_height)
-        
-        # Фокусируемся на окне
         self.window.focus_force()
+        
+        self._create_content()
     
     def _create_content(self):
         """Создает содержимое окна"""
+        # Контейнер для центрирования
+        center_frame = tk.Frame(self.window, bg='white')
+        center_frame.place(relx=0.5, rely=0.5, anchor='center')
+        
         # Заголовок
         tk.Label(
-            self.window,
+            center_frame,
             text="ЦЕЛЕВОЙ СИМВОЛ",
             font=('Arial', 28, 'bold'),
             bg='white',
             fg='#2c3e50'
-        ).pack(pady=(60, 40))
+        ).pack(pady=(0, 40))
         
         # Очень большой символ
         tk.Label(
-            self.window,
+            center_frame,
             text=self.symbol,
             font=('Arial', 120, 'bold'),
             bg='white',
@@ -71,7 +70,7 @@ class TargetWindow:
         
         # Инструкция
         tk.Label(
-            self.window,
+            center_frame,
             text="Сфокусируйтесь на символе и нажмите ПРОБЕЛ",
             font=('Arial', 16),
             bg='white',
@@ -80,24 +79,22 @@ class TargetWindow:
         
         # Дополнительная инструкция
         tk.Label(
-            self.window,
+            center_frame,
             text="(для запуска мигания)",
             font=('Arial', 12),
             bg='white',
             fg='#95a5a6'
         ).pack(pady=(10, 0))
     
-    def _center_window(self, width, height):
-        """Центрирует окно на экране"""
-        screen_width = self.window.winfo_screenwidth()
-        screen_height = self.window.winfo_screenheight()
-        x = (screen_width - width) // 2
-        y = (screen_height - height) // 2
-        self.window.geometry(f'{width}x{height}+{x}+{y}')
+    def _exit_program(self, event=None):
+        """Закрытие программы"""
+        import sys
+        self.window.destroy()
+        self.parent.destroy()
+        sys.exit(0)
     
     def _on_space_pressed(self, event=None):
         """Обработка нажатия пробела"""
-        #self.lsl_service.send_marker("TARGET_WINDOW_CLOSE")#, symbol=self.symbol)
         self.window.destroy()
         self.on_start_callback()
     

@@ -5,14 +5,21 @@ import time
 from app.get_logger import setup_logger
 import logging
 from app.code_generator import CodeGen
-#from app.lsl_markers import LSLMarkerService
 from pylsl import StreamInfo, StreamOutlet
+import sys
 
 class SSVEPSpellerExperiment:
     def __init__(self, root):
         self.root = root
         self.logger = logging.getLogger("BCI")
         setup_logger(self.logger, "Experiment")
+
+        self.root.attributes('-fullscreen', True)
+        self.root.configure(bg='white')
+        
+        self.root.bind('<Escape>', self._exit_program)
+        
+        self.root.protocol("WM_DELETE_WINDOW", self._exit_program)
         
         self.codelen = 9
         self.cycle_duration = 0.5
@@ -43,7 +50,12 @@ class SSVEPSpellerExperiment:
                   source_id='my_marker_stream')
         self.outlet = StreamOutlet(info)
 
-        #self.lsl_service = LSLMarkerService()
+    def _exit_program(self, event=None):
+        """Закрытие программы"""
+        self.logger.info("Программа завершена пользователем")
+        if messagebox.askyesno("Выход", "Вы уверены, что хотите выйти?"):
+            self.root.destroy()
+            sys.exit(0)
 
     def send_event_marker(self, event_type, **kwargs):
         """Отправка маркера события через LSL"""
@@ -61,33 +73,52 @@ class SSVEPSpellerExperiment:
         from app.welcome import WelcomeWindow
         self.send_event_marker("WINDOW_OPEN_hello", window="welcome")
         self.logger.info("Показ приветственного окна")
-        WelcomeWindow(self._show_instructions)
+        WelcomeWindow(self._show_instructions, self.root)
     
     def _show_instructions(self):
         """Показывает окно инструкций"""
         from app.instructions import InstructionWindow
         self.send_event_marker("WINDOW_OPEN_instruct", window="instructions")
         self.logger.info("Показ окна инструкций")
-        InstructionWindow(self._show_preparation)
+        InstructionWindow(self._show_preparation, self.root)
     
     def _show_preparation(self):
         """Окно подготовки"""
         self.send_event_marker("WINDOW_OPEN_preparation", window="preparation")
+        self.root.withdraw()
+
         self.prep_window = tk.Toplevel(self.root)
-        self.prep_window.title("Подготовка")
-        self.prep_window.geometry("450x600")
+        self.prep_window.attributes('-fullscreen', True)
         self.prep_window.configure(bg='white')
-        self.prep_window.resizable(False, False)
         
-        self._center_window(self.prep_window)
-        self.logger.info("Ввод данных")
-        tk.Label(
+        self.prep_window.bind('<Escape>', lambda e: self._exit_program(e))
+        self.prep_window.protocol("WM_DELETE_WINDOW", lambda: self._exit_program())
+        
+        exit_button = tk.Button(
             self.prep_window,
+            text="✕",
+            font=('Arial', 14, 'bold'),
+            command=self._exit_program,
+            bg='#e74c3c',
+            fg='white',
+            relief='flat',
+            width=3,
+            height=1
+        )
+        exit_button.place(x=20, y=20)
+        
+        self.logger.info("Ввод данных")
+        
+        center_frame = tk.Frame(self.prep_window, bg='white')
+        center_frame.place(relx=0.5, rely=0.5, anchor='center')
+        
+        tk.Label(
+            center_frame,
             text="НАСТРОЙКИ ЭКСПЕРИМЕНТА",
             font=('Arial', 18, 'bold'),
             bg='white',
             fg='#2c3e50'
-        ).pack(pady=(30, 20))
+        ).pack(pady=(0, 30))
         
         tk.Label(
             self.prep_window,
@@ -95,7 +126,7 @@ class SSVEPSpellerExperiment:
             font=('Arial', 11),
             bg='white',
             fg='#34495e'
-        ).pack()
+        ).pack(in_=center_frame)
         
         self.text_entry = tk.Entry(
             self.prep_window,
@@ -111,7 +142,7 @@ class SSVEPSpellerExperiment:
             font=('Arial', 11),
             bg='white',
             fg='#34495e'
-        ).pack()
+        ).pack(in_=center_frame)
         
         self.duration_entry = tk.Entry(
             self.prep_window,
@@ -128,7 +159,7 @@ class SSVEPSpellerExperiment:
             font=('Arial', 11),
             bg='white',
             fg='#34495e'
-        ).pack()
+        ).pack(in_=center_frame)
 
         self.cycles_entry = tk.Entry(
             self.prep_window,
@@ -153,7 +184,7 @@ class SSVEPSpellerExperiment:
             font=('Arial', 11),
             bg='white',
             fg='#34495e'
-        ).pack()
+        ).pack(in_=center_frame)
 
         self.codelen_entry = tk.Entry(
             self.prep_window,
@@ -173,18 +204,7 @@ class SSVEPSpellerExperiment:
             fg='white',
             width=20,
             height=2
-        ).pack()
-    
-    def _center_window(self, window):
-        """Центрирует окно на экране"""
-        window.update_idletasks()
-        width = window.winfo_width()
-        height = window.winfo_height()
-        screen_width = window.winfo_screenwidth()
-        screen_height = window.winfo_screenheight()
-        x = (screen_width - width) // 2
-        y = (screen_height - height) // 2
-        window.geometry(f'{width}x{height}+{x}+{y}')
+        ).pack(in_=center_frame)
     
     def _start_experiment(self):
         """Начинает эксперимент"""
@@ -236,11 +256,27 @@ class SSVEPSpellerExperiment:
     
     def _setup_main_ui(self):
         """Настраивает главное окно (скрытое)"""
+        self.root.deiconify()
+        self.root.attributes('-fullscreen', True)
+
+        # Добавляем кнопку выхода
+        exit_button = tk.Button(
+            self.root,
+            text="✕ ВЫЙТИ",
+            font=('Arial', 12, 'bold'),
+            command=self._exit_program,
+            bg='#e74c3c',
+            fg='white',
+            relief='flat',
+            padx=20,
+            pady=10
+        )
+        exit_button.place(x=20, y=20)
+
         window_width = int(self.screen_width * 0.9)
         window_height = int(self.screen_height * 0.9)
 
         self.root.title("SSVEP BCI Эксперимент")
-        self.root.geometry(f"{window_width}x{window_height}")
         self.root.configure(bg='white')
 
         main_container = tk.PanedWindow(self.root, orient=tk.VERTICAL, bg='white', sashwidth=5)

@@ -1,32 +1,49 @@
 import tkinter as tk
+import sys
 
 class WelcomeWindow:
-    def __init__(self, parent_callback):
+    def __init__(self, parent_callback, root_window):
         self.callback = parent_callback
+        self.root_window = root_window
         
         self.window = tk.Toplevel()
-        self.window.title("Добро пожаловать!")
-        self.window.geometry("500x350")
-        self.window.configure(bg='white')
-        self.window.resizable(False, False)
         
-        self.window.attributes('-topmost', True)
-        self.window.protocol("WM_DELETE_WINDOW", lambda: None)
+        self.window.attributes('-fullscreen', True)
+        self.window.configure(bg='white')
+        
+        self.window.bind('<Escape>', self._exit_program)
+        self.window.protocol("WM_DELETE_WINDOW", self._exit_program)
+        
+        exit_button = tk.Button(
+            self.window,
+            text="✕ ВЫЙТИ",
+            font=('Arial', 12, 'bold'),
+            command=self._exit_program,
+            bg='#e74c3c',
+            fg='white',
+            relief='flat',
+            padx=20,
+            pady=10
+        )
+        exit_button.place(x=20, y=20)
         
         self._create_content()
-        self._center_window()
     
     def _create_content(self):
+        center_frame = tk.Frame(self.window, bg='white')
+        center_frame.place(relx=0.5, rely=0.5, anchor='center')
+        
         tk.Label(
-            self.window,
+            center_frame,
             text="ДОБРО ПОЖАЛОВАТЬ!",
             font=('Arial', 22, 'bold'),
             bg='white',
             fg='#2c3e50'
-        ).pack(pady=(40, 20))
+        ).pack(pady=(0, 20))
+
         
         tk.Label(
-            self.window,
+            center_frame,
             text="Спасибо за участие в эксперименте",
             font=('Arial', 14),
             bg='white',
@@ -34,7 +51,7 @@ class WelcomeWindow:
         ).pack(pady=(0, 20))
         
         tk.Label(
-            self.window,
+            center_frame,
             text="В этом эксперименте вы будете\nвводить текст с помощью\nинтерфейса мозг-компьютер.",
             font=('Arial', 12),
             bg='white',
@@ -43,7 +60,7 @@ class WelcomeWindow:
         ).pack(pady=(0, 40))
         
         tk.Button(
-            self.window,
+            center_frame,
             text="ПРОДОЛЖИТЬ (ПРОБЕЛ)",
             font=('Arial', 12, 'bold'),
             command=self._on_continue,
@@ -55,15 +72,12 @@ class WelcomeWindow:
         
         self.window.bind('<space>', lambda e: self._on_continue())
     
-    def _center_window(self):
-        self.window.update_idletasks()
-        width = self.window.winfo_width()
-        height = self.window.winfo_height()
-        screen_width = self.window.winfo_screenwidth()
-        screen_height = self.window.winfo_screenheight()
-        x = (screen_width - width) // 2
-        y = (screen_height - height) // 2
-        self.window.geometry(f'{width}x{height}+{x}+{y}')
+    def _exit_program(self, event=None):
+        """Закрытие программы"""
+        import sys
+        self.window.destroy()
+        self.root.destroy()
+        sys.exit(0)
     
     def _on_continue(self):
         self.window.destroy()
