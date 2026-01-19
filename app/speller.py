@@ -25,7 +25,7 @@ class SSVEPSpellerExperiment:
         self.root.protocol("WM_DELETE_WINDOW", self._exit_program)
 
         self.codelen = 9
-        self.cycle_duration = 0.5
+        self.cycle_duration = 9
         self.num_cycles = 10
         self.base_interval = self.cycle_duration / 9
         self.transition_duration = self.base_interval * 0.2
@@ -222,7 +222,7 @@ class SSVEPSpellerExperiment:
             width=12,
             justify="center"
         )
-        self.duration_entry.insert(0, "0.5")
+        self.duration_entry.insert(0, "9")
         self.duration_entry.pack(ipady=6)
         
         # Количество циклов
@@ -656,11 +656,11 @@ class SSVEPSpellerExperiment:
                 if self.target_symbol == s and self.is_running:
                     l.config(fg="#ffffff")  # Белый при мигании цели
                 elif not self.is_running:
-                    l.config(fg="#95a5a6")  # Светло-серый при наведении
+                    l.config(fg="#7f8c8d")  # Светло-серый при наведении
                     
             def on_leave(e, l=label, s=symbol):
                 if self.target_symbol == s and self.is_running:
-                    l.config(fg="#f53939")  # Красный для целевого символа
+                    l.config(fg="#7f8c8d")  # Красный для целевого символа
                 elif not self.is_running:
                     l.config(fg="#7f8c8d")  # Темно-серый по умолчанию
                 else:
@@ -853,7 +853,7 @@ class SSVEPSpellerExperiment:
                                 label.config(fg="#7f8c8d")  # Серый для остальных
 
                 # Очень короткая задержка для вспышки (20% от интервала)
-                time.sleep(self.base_interval * 0.2)
+                time.sleep(self.base_interval * 0.1)
 
                 # Фаза 2: Основное состояние - все символы серые
                 for i, label in enumerate(self.labels):
@@ -872,7 +872,7 @@ class SSVEPSpellerExperiment:
                                 label.config(fg="#7f8c8d")  # Серый для остальных (0)
 
                 # Оставшаяся часть интервала
-                time.sleep(self.base_interval * 0.8)
+                time.sleep(self.base_interval * 0.9)
 
             self.send_event_marker(
                 "CYCLE_END",
