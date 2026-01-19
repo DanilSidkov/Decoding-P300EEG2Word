@@ -770,7 +770,7 @@ class SSVEPSpellerExperiment:
         if target_index != -1:
             for i, label in enumerate(self.labels):
                 if i == target_index:
-                    label.config(fg="#f53939")  # Красный для целевого символа
+                    label.config(fg="#7f8c8d")  # Серый для целевого символа
                 else:
                     label.config(fg="#7f8c8d")  # Серый для остальных
 
@@ -835,32 +835,44 @@ class SSVEPSpellerExperiment:
                     else 0,
                 )
 
-                # Фаза 1: Основное состояние - МЕНЯЕМ ТОЛЬКО ЦВЕТ ТЕКСТА
+                # Фаза 1: Короткая белая вспышка для символов, у которых в следующем бите будет 1
+                # (только для битов, которые будут 1 в текущем интервале)
                 for i, label in enumerate(self.labels):
                     if i < len(self.patterns):
                         if self.patterns[i][interval] == 1:
-                            # Активное мигание - яркий цвет
+                            # Белая вспышка для символов, которые будут 1 в этом интервале
                             if i == target_index:
-                                label.config(fg="#f53939")  # Белый для целевого
+                                label.config(fg="#ffffff")  # Белый для целевого
                             else:
                                 label.config(fg="#ffffff")  # Белый для остальных
                         else:
-                            # Неактивное мигание
+                            # Для символов с 0 оставляем серый
                             if i == target_index:
-                                label.config(fg="#37130f")  # Красный для целевого
+                                label.config(fg="#7f8c8d")  # Красный для целевого
                             else:
                                 label.config(fg="#7f8c8d")  # Серый для остальных
 
-                time.sleep(self.base_interval * 0.9)
+                # Очень короткая задержка для вспышки (20% от интервала)
+                time.sleep(self.base_interval * 0.2)
 
-                # Фаза 2: Кратковременное отключение - МЕНЯЕМ ТОЛЬКО ЦВЕТ ТЕКСТА
-                if self.is_running:
-                    for i, label in enumerate(self.labels):
-                        if i == target_index:
-                            label.config(fg="#37130f")  # Красный для целевого
+                # Фаза 2: Основное состояние - все символы серые
+                for i, label in enumerate(self.labels):
+                    if i < len(self.patterns):
+                        if self.patterns[i][interval] == 1:
+                            # Символы с 1 становятся серыми после вспышки
+                            if i == target_index:
+                                label.config(fg="#7f8c8d")  # Красный для целевого (1)
+                            else:
+                                label.config(fg="#7f8c8d")  # Серый для остальных (1)
                         else:
-                            label.config(fg="#7f8c8d")  # Серый для остальных
-                    time.sleep(self.base_interval * 0.1)
+                            # Символы с 0 остаются серыми
+                            if i == target_index:
+                                label.config(fg="#7f8c8d")  # Красный для целевого (0)
+                            else:
+                                label.config(fg="#7f8c8d")  # Серый для остальных (0)
+
+                # Оставшаяся часть интервала
+                time.sleep(self.base_interval * 0.8)
 
             self.send_event_marker(
                 "CYCLE_END",
