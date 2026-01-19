@@ -1,7 +1,6 @@
 import tkinter as tk
 
 from app.speller import SSVEPSpellerExperiment
-from app.monitor_utils import move_to_monitor
 
 
 def main():
@@ -9,10 +8,6 @@ def main():
     
     # Скрываем окно для настройки
     root.withdraw()
-    
-    # Перемещаем окно на второй монитор
-    # (если второго монитора нет, окно останется на первом)
-    move_to_monitor(root, monitor_num=2)
     
     app = SSVEPSpellerExperiment(root)
     app.start()

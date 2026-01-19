@@ -17,7 +17,6 @@ class SSVEPSpellerExperiment:
         self.logger = logging.getLogger("BCI")
         setup_logger(self.logger, "Experiment")
 
-        # Технологичный дизайн
         self.root.attributes("-fullscreen", True)
         self.root.configure(bg="#0a0e17")
         
