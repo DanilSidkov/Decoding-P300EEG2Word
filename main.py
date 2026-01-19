@@ -5,7 +5,7 @@ from app.speller import SSVEPSpellerExperiment
 
 def main():
     root = tk.Tk()
-    
+    root.geometry("+{-1920}+{0}")
     # Скрываем окно для настройки
     root.withdraw()
     
