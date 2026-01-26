@@ -1,15 +1,8 @@
-import logging
+# [file name]: preparation_window.py
 import sys
-import threading
-import time
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk, messagebox
 
-from pylsl import StreamInfo, StreamOutlet
-
-from app.code_generator import CodeGen
-from app.get_logger import setup_logger
-from app.theme import ThemeManager
 
 class PreparationWindow:
     """Окно подготовки к эксперименту"""
@@ -117,7 +110,7 @@ class PreparationWindow:
         """Создает основной контент окна"""
         # Основной контейнер
         main_container = tk.Frame(self.canvas, bg=self.theme["bg_primary"])
-        main_container.place(relx=0.5, rely=0.5, anchor="center", width=800, height=600)
+        main_container.place(relx=0.5, rely=0.5, anchor="center", width=900, height=700)
 
         # Заголовок
         tk.Label(
@@ -126,11 +119,11 @@ class PreparationWindow:
             font=("Segoe UI", 28, "bold"),
             bg=self.theme["bg_primary"],
             fg=self.theme["text_primary"],
-        ).pack(pady=(0, 40))
+        ).pack(pady=(0, 30))
 
         # Форма ввода
         form_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
-        form_frame.pack(pady=(0, 40))
+        form_frame.pack(pady=(0, 40), fill=tk.BOTH, expand=True)
 
         # Поле ввода текста
         input_group = tk.Frame(form_frame, bg=self.theme["bg_primary"])
@@ -155,10 +148,117 @@ class PreparationWindow:
         )
         self.text_entry.insert(0, "ПРИВЕТ")
         self.text_entry.pack(fill=tk.X, pady=(0, 10), ipady=8)
+
+        # Тип стимула
+        stimulus_group = tk.Frame(form_frame, bg=self.theme["bg_primary"])
+        stimulus_group.pack(pady=(0, 20), fill=tk.X)
+        
+        tk.Label(
+            stimulus_group,
+            text="ТИП СТИМУЛА",
+            font=("Segoe UI", 12, "bold"),
+            bg=self.theme["bg_primary"],
+            fg=self.theme["accent_primary"],
+        ).pack(anchor="w", pady=(0, 5))
+        
+        # Переменная для типа стимула
+        self.stimulus_type = tk.StringVar(value="Мигание")
+        
+        # Фрейм для радиокнопок
+        radio_frame = tk.Frame(stimulus_group, bg=self.theme["bg_primary"])
+        radio_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Радиокнопки для выбора типа стимула
+        rb1 = tk.Radiobutton(
+            radio_frame,
+            text="Только мигание (стандартный SSVEP)",
+            variable=self.stimulus_type,
+            value="Мигание",
+            font=("Segoe UI", 11),
+            bg=self.theme["bg_primary"],
+            fg=self.theme["text_primary"],
+            selectcolor=self.theme["bg_tertiary"],
+            activebackground=self.theme["bg_primary"],
+            activeforeground=self.theme["accent_primary"],
+            cursor="hand2"
+        )
+        rb1.pack(anchor="w", pady=(5, 0))
+        
+        rb2 = tk.Radiobutton(
+            radio_frame,
+            text="Только движение буквы",
+            variable=self.stimulus_type,
+            value="Движение",
+            font=("Segoe UI", 11),
+            bg=self.theme["bg_primary"],
+            fg=self.theme["text_primary"],
+            selectcolor=self.theme["bg_tertiary"],
+            activebackground=self.theme["bg_primary"],
+            activeforeground=self.theme["accent_primary"],
+            cursor="hand2"
+        )
+        rb2.pack(anchor="w", pady=(5, 0))
+        
+        rb3 = tk.Radiobutton(
+            radio_frame,
+            text="Мигание + движение (комбинированный)",
+            variable=self.stimulus_type,
+            value="Комбинированный",
+            font=("Segoe UI", 11),
+            bg=self.theme["bg_primary"],
+            fg=self.theme["text_primary"],
+            selectcolor=self.theme["bg_tertiary"],
+            activebackground=self.theme["bg_primary"],
+            activeforeground=self.theme["accent_primary"],
+            cursor="hand2"
+        )
+        rb3.pack(anchor="w", pady=(5, 0))
+
+        # Тип движения
+        motion_group = tk.Frame(form_frame, bg=self.theme["bg_primary"])
+        motion_group.pack(pady=(0, 20), fill=tk.X)
+        
+        tk.Label(
+            motion_group,
+            text="ТИП ДВИЖЕНИЯ",
+            font=("Segoe UI", 12, "bold"),
+            bg=self.theme["bg_primary"],
+            fg=self.theme["accent_primary"],
+        ).pack(anchor="w", pady=(0, 5))
+        
+        # Переменная для типа движения
+        self.motion_type = tk.StringVar(value="Дрожание")
+        
+        # Выпадающий список для типа движения
+        motion_options = ["Дрожание", "Колебание размера"]
+        self.motion_combo = ttk.Combobox(
+            motion_group,
+            textvariable=self.motion_type,
+            values=motion_options,
+            font=("Segoe UI", 11),
+            state="readonly",
+            width=30
+        )
+        self.motion_combo.pack(anchor="w", pady=(0, 5), ipady=6)
+        
+        # Описание выбранного типа движения
+        self.motion_desc = tk.Label(
+            motion_group,
+            text="Дрожание: буква слегка вибрирует на месте (1-2 пикселя)",
+            font=("Segoe UI", 10),
+            bg=self.theme["bg_primary"],
+            fg=self.theme["text_secondary"],
+            wraplength=500,
+            justify="left"
+        )
+        self.motion_desc.pack(anchor="w", pady=(5, 0))
+        
+        # Привязываем изменение выбора типа движения
+        self.motion_combo.bind("<<ComboboxSelected>>", self._update_motion_desc)
         
         # Горизонтальный раздел для параметров
         params_frame = tk.Frame(form_frame, bg=self.theme["bg_primary"])
-        params_frame.pack(fill=tk.X, pady=(0, 30))
+        params_frame.pack(fill=tk.X, pady=(0, 20))
         
         # Длительность цикла
         duration_group = tk.Frame(params_frame, bg=self.theme["bg_primary"])
@@ -238,7 +338,7 @@ class PreparationWindow:
         # Подсказка
         hint_label = tk.Label(
             form_frame,
-            text="1 цикл = N (длина кода) интервалов мигания",
+            text="1 цикл = N (длина кода) интервалов стимуляции",
             font=("Segoe UI", 10),
             bg=self.theme["bg_primary"],
             fg=self.theme["text_tertiary"],
@@ -247,7 +347,7 @@ class PreparationWindow:
 
         # Кнопка запуска
         button_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
-        button_frame.pack()
+        button_frame.pack(pady=(10, 0))
         
         start_button = tk.Button(
             button_frame,
@@ -269,6 +369,15 @@ class PreparationWindow:
         )
         start_button.pack()
         self._create_glow_effect(start_button, self.theme["accent_success"])
+
+    def _update_motion_desc(self, event=None):
+        """Обновляет описание выбранного типа движения"""
+        motion_type = self.motion_type.get()
+        descriptions = {
+            "Дрожание": "Дрожание: буква слегка вибрирует на месте (1-2 пикселя)",
+            "Колебание размера": "Колебание размера: буква плавно увеличивается и уменьшается",
+        }
+        self.motion_desc.config(text=descriptions.get(motion_type, ""))
 
     def _create_glow_effect(self, widget, color=None):
         """Создает эффект свечения для виджета"""
@@ -312,4 +421,11 @@ class PreparationWindow:
             messagebox.showerror("Ошибка", "Введите текст")
             return
             
-        self.callback(text, self.codelen_entry.get(), self.duration_entry.get(), self.cycles_entry.get())
+        self.callback(
+            text, 
+            self.codelen_entry.get(), 
+            self.duration_entry.get(), 
+            self.cycles_entry.get(),
+            self.stimulus_type.get(),
+            self.motion_type.get()
+        )

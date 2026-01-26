@@ -3,23 +3,24 @@ import sys
 import threading
 import time
 import tkinter as tk
+import math
 from tkinter import messagebox, ttk
 
-from pylsl import StreamInfo, StreamOutlet
-
 from app.code_generator import CodeGen
-from app.get_logger import setup_logger
 from app.theme import ThemeManager
+
 
 class ExperimentWindow:
     """Главное окно эксперимента"""
     
-    def __init__(self, root_window, theme_manager, experiment_instance, target_text):
+    def __init__(self, root_window, theme_manager, experiment_instance, target_text, stimulus_type="Мигание", motion_type="Дрожание"):
         self.root = root_window
         self.theme_manager = theme_manager
         self.experiment_instance = experiment_instance
         self.theme = theme_manager.get_theme()
         self.target_text = target_text
+        self.stimulus_type = stimulus_type  # "Мигание", "Движение", "Комбинированный"
+        self.motion_type = motion_type  # "Дрожание", "Колебание размера"
 
         self.window = root_window
         self.window.title("BCI Speller - Эксперимент")
@@ -49,6 +50,9 @@ class ExperimentWindow:
         self.screen_width = self.window.winfo_screenwidth()
         self.screen_height = self.window.winfo_screenheight()
 
+        # Словарь для хранения оригинальных положений и свойств символов
+        self.symbol_properties = {}  # key: label, value: dict with original properties
+        
         # Инициализация символов и паттернов
         self.setup_symbols()
         
@@ -168,31 +172,44 @@ class ExperimentWindow:
         self.status_indicator = self.status_light.create_oval(2, 2, 18, 18, 
                                                             fill=self.theme["text_tertiary"], outline="")
 
+        # Обновляем текст статуса в зависимости от типа стимула
+        stimulus_text = {
+            "Мигание": "Мигание",
+            "Движение": "Движение",
+            "Комбинированный": "Мигание+Движение"
+        }
+        
         self.status_label = tk.Label(
             status_group,
-            text="Готов к началу эксперимента",
+            text=f"Тип стимула: {stimulus_text.get(self.stimulus_type, 'Мигание')}",
             font=("Segoe UI", 12, "bold"),
             bg=self.theme["bg_primary"],
             fg=self.theme["text_primary"],
         )
         self.status_label.pack(side=tk.LEFT)
 
-        # Индикатор мигания
-        flash_group = tk.Frame(info_frame, bg=self.theme["bg_primary"])
-        flash_group.pack(side=tk.RIGHT)
+        # Индикатор стимуляции
+        stimulus_group = tk.Frame(info_frame, bg=self.theme["bg_primary"])
+        stimulus_group.pack(side=tk.RIGHT)
 
-        self.flash_indicator = tk.Label(
-            flash_group,
+        self.stimulus_indicator = tk.Label(
+            stimulus_group,
             text="○",
             font=("Segoe UI", 16),
             bg=self.theme["bg_primary"],
             fg=self.theme["text_tertiary"],
         )
-        self.flash_indicator.pack(side=tk.LEFT, padx=(0, 5))
+        self.stimulus_indicator.pack(side=tk.LEFT, padx=(0, 5))
 
+        stimulus_type_text = {
+            "Мигание": "МИГАНИЕ",
+            "Движение": "ДВИЖЕНИЕ",
+            "Комбинированный": "МИГАНИЕ+ДВИЖ"
+        }
+        
         tk.Label(
-            flash_group,
-            text="МИГАНИЕ",
+            stimulus_group,
+            text=stimulus_type_text.get(self.stimulus_type, "СТИМУЛЯЦИЯ"),
             font=("Segoe UI", 11),
             bg=self.theme["bg_primary"],
             fg=self.theme["text_secondary"],
@@ -258,16 +275,23 @@ class ExperimentWindow:
         ).pack(anchor="w", padx=20, pady=(15, 10))
 
         # Настройки
+        settings_text = f"Тип: {self.stimulus_type} | "
+        if self.stimulus_type != "Мигание":
+            settings_text += f"Движение: {self.motion_type} | "
+        settings_text += f"Цикл: {self.experiment_instance.cycle_duration} сек | Циклов: {self.experiment_instance.num_cycles}"
+        
         self.settings_label = tk.Label(
             left_bottom_frame,
-            text=f"Длительность цикла: {self.experiment_instance.cycle_duration} сек | Циклов: {self.experiment_instance.num_cycles}",
+            text=settings_text,
             font=("Segoe UI", 10),
             bg=self.theme["bg_secondary"],
             fg=self.theme["text_secondary"],
+            wraplength=350,
+            justify="left"
         )
         self.settings_label.pack(anchor="w", padx=20, pady=(0, 5))
 
-        # Прогресс мигания
+        # Прогресс стимуляции
         self.progress_label = tk.Label(
             left_bottom_frame,
             text=f"Цикл: 0/{self.experiment_instance.num_cycles} | Интервал: 0/{self.experiment_instance.codelen}",
@@ -334,25 +358,31 @@ class ExperimentWindow:
         self.window.after(100, self._show_next_target)
 
     def _create_symbol_grid(self, parent):
-        """Создает сетку СИМВОЛОВ (без плиток/карточек)"""
+        """Создает сетку СИМВОЛОВ с использованием place для возможности движения"""
         self.grid_frame = tk.Frame(parent, bg=self.theme["bg_primary"])
-        self.grid_frame.pack(fill=tk.BOTH, expand=True)
-
+        self.grid_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        # Ждем обновления геометрии для получения реальных размеров
+        self.grid_frame.update_idletasks()
+        
         rows = 3
         cols = 12
-
-        for i in range(rows):
-            self.grid_frame.grid_rowconfigure(i, weight=1, uniform="row")
-        for j in range(cols):
-            self.grid_frame.grid_columnconfigure(j, weight=1, uniform="col")
-
+        
+        # Вычисляем размеры ячеек
+        cell_width = self.grid_frame.winfo_width() // cols
+        cell_height = self.grid_frame.winfo_height() // rows
+        
         self.labels = []
         
         for i, symbol in enumerate(self.symbols):
             row = i // cols
             col = i % cols
-
-            # СОЗДАЕМ ТОЛЬКО ЛЕЙБЛЫ С СИМВОЛАМИ (без фреймов)
+            
+            # Вычисляем координаты центра ячейки
+            x = col * cell_width + cell_width // 2
+            y = row * cell_height + cell_height // 2
+            
+            # СОЗДАЕМ ЛЕЙБЛЫ С СИМВОЛАМИ с использованием place
             label = tk.Label(
                 self.grid_frame,
                 text=symbol,
@@ -362,8 +392,20 @@ class ExperimentWindow:
                 width=3,
                 height=1,
             )
-            label.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
+            label.place(x=x, y=y, anchor="center")
             self.labels.append(label)
+            
+            # Сохраняем оригинальные свойства символа
+            self.symbol_properties[label] = {
+                'row': row,
+                'col': col,
+                'symbol': symbol,
+                'font_size': 22,
+                'base_x': x,
+                'base_y': y,
+                'cell_width': cell_width,
+                'cell_height': cell_height
+            }
 
     def _create_glow_effect(self, widget, color=None):
         """Создает эффект свечения для виджета"""
@@ -409,6 +451,8 @@ class ExperimentWindow:
                 symbol=self.target_symbol,
                 index=self.current_target_index,
                 total=len(self.target_symbols),
+                stimulus_type=self.stimulus_type,
+                motion_type=self.motion_type
             )
 
             # Обновляем индикатор статуса
@@ -419,7 +463,7 @@ class ExperimentWindow:
             )
             
             self.current_symbol_label.config(
-                text=f"СИМВОЛ: '{self.target_symbol}' • ПОЗИЦИЯ: {self.current_target_index + 1}/{len(self.target_symbols)}"
+                text=f"СИМВОЛ: '{self.target_symbol}' • ПОЗИЦИЯ: {self.current_target_index + 1}/{len(self.target_symbols)} • ТИП: {self.stimulus_type}"
             )
             
             self.experiment_progress.config(
@@ -438,27 +482,38 @@ class ExperimentWindow:
             "TARGET_CONFIRMED",
             symbol=self.target_symbol,
             index=self.current_target_index,
+            stimulus_type=self.stimulus_type,
+            motion_type=self.motion_type
         )
         self.window.deiconify()
 
         # Обновляем индикатор статуса
         self.status_light.itemconfig(self.status_indicator, fill=self.theme["accent_warning"])
+        
+        stimulus_text = {
+            "Мигание": "Мигание... Смотрите на целевой символ",
+            "Движение": "Движение... Смотрите на целевой символ",
+            "Комбинированный": "Мигание+Движение... Смотрите на целевой символ"
+        }
+        
         self.status_label.config(
-            text="Мигание... Смотрите на целевой символ",
+            text=stimulus_text.get(self.stimulus_type, "Стимуляция... Смотрите на целевой символ"),
             fg=self.theme["accent_warning"]
         )
 
-        self._start_flashing()
+        self._start_stimulation()
 
-    def _start_flashing(self):
-        """Запускает мигание для текущего символа"""
+    def _start_stimulation(self):
+        """Запускает стимуляцию для текущего символа"""
         if not self.is_running:
             self.experiment_instance.send_event_marker(
-                "FLASHING_START",
+                "STIMULATION_START",
                 symbol=self.target_symbol,
                 duration=self.experiment_instance.cycle_duration,
                 cycles=self.experiment_instance.num_cycles,
                 codelen=self.experiment_instance.codelen,
+                stimulus_type=self.stimulus_type,
+                motion_type=self.motion_type
             )
             self.is_running = True
             self.current_interval = 0
@@ -467,13 +522,13 @@ class ExperimentWindow:
             self._update_progress_display()
             self._highlight_target_symbol()
 
-            self.flash_thread = threading.Thread(
-                target=self._flash_sequence, daemon=True
+            self.stimulation_thread = threading.Thread(
+                target=self._stimulation_sequence, daemon=True
             )
-            self.flash_thread.start()
+            self.stimulation_thread.start()
 
     def _highlight_target_symbol(self):
-        """Подсвечивает целевой символ в сетке (ТОЛЬКО ЦВЕТ ТЕКСТА)"""
+        """Подсвечивает целевой символ в сетке"""
         target_index = self.symbols.index(self.target_symbol) if self.target_symbol in self.symbols else -1
         if target_index != -1:
             for i, label in enumerate(self.labels):
@@ -483,19 +538,64 @@ class ExperimentWindow:
                     label.config(fg=self.theme["symbol_custom_0"])
 
     def _update_progress_display(self):
-        """Обновляет отображение прогресса мигания"""
+        """Обновляет отображение прогресса стимуляции"""
         self.progress_label.config(
             text=f"Цикл: {self.current_cycle}/{self.experiment_instance.num_cycles} | Интервал: {self.current_interval}/{self.experiment_instance.codelen}"
         )
         
-        # Обновляем индикатор мигания
+        # Обновляем индикатор стимуляции
         if self.is_running:
-            self.flash_indicator.config(text="●", fg=self.theme["accent_warning"])
+            self.stimulus_indicator.config(text="●", fg=self.theme["accent_warning"])
         else:
-            self.flash_indicator.config(text="○", fg=self.theme["text_tertiary"])
+            self.stimulus_indicator.config(text="○", fg=self.theme["text_tertiary"])
 
-    def _flash_sequence(self):
-        """Выполняет последовательность мигания с маркерами - ТОЛЬКО ЦВЕТ ТЕКСТА"""
+    def _apply_motion(self, label, active, interval):
+        """Применяет движение к символу в зависимости от типа движения"""
+        if not active:
+            # Сбрасываем движение для неактивных символов
+            props = self.symbol_properties[label]
+            
+            # ВАЖНО: Используем place с абсолютными координатами вместо grid
+            # Вычисляем абсолютные координаты для центрирования
+            cell_width = self.grid_frame.winfo_width() // 12
+            cell_height = self.grid_frame.winfo_height() // 3
+            
+            x = props['col'] * cell_width + cell_width // 2
+            y = props['row'] * cell_height + cell_height // 2
+            
+            label.place(x=x, y=y, anchor="center")
+            label.config(font=("Segoe UI", props['font_size'], "bold"))
+            return
+        
+        # Вычисляем фазу движения на основе интервала
+        phase = (interval % 10) / 10.0 * 2 * math.pi
+        
+        # Получаем исходные свойства
+        props = self.symbol_properties[label]
+        cell_width = self.grid_frame.winfo_width() // 12
+        cell_height = self.grid_frame.winfo_height() // 3
+        
+        # Базовые координаты (центр ячейки)
+        base_x = props['col'] * cell_width + cell_width // 2
+        base_y = props['row'] * cell_height + cell_height // 2
+        
+        if self.motion_type == "Дрожание":
+            # Дрожание: небольшие случайные смещения
+            import random
+            x_offset = random.randint(-4, 4)
+            y_offset = random.randint(-4, 4)
+            
+            label.place(x=base_x + x_offset, y=base_y + y_offset, anchor="center")
+            
+        elif self.motion_type == "Колебание размера":
+            # Колебание размера: синусоидальное изменение размера шрифта
+            scale = 0.5 + 0.5 * math.sin(phase * 2)  # От 0.8 до 1.2
+            font_size = int(props['font_size'] * scale)
+            label.config(font=("Segoe UI", font_size, "bold"))
+            label.place(x=base_x, y=base_y, anchor="center")
+
+    def _stimulation_sequence(self):
+        """Выполняет последовательность стимуляции с маркерами"""
         for cycle in range(self.experiment_instance.num_cycles):
             if not self.is_running:
                 break
@@ -515,6 +615,8 @@ class ExperimentWindow:
                 total_cycles=self.experiment_instance.num_cycles,
                 target_symbol=self.target_symbol,
                 target_index=target_index,
+                stimulus_type=self.stimulus_type,
+                motion_type=self.motion_type
             )
 
             for interval in range(self.experiment_instance.codelen):
@@ -532,9 +634,9 @@ class ExperimentWindow:
 
                 states_str = "".join(str(s) for s in states)
 
-                # ВАЖНЫЙ МАРКЕР: НАЧАЛО ИНТЕРВАЛА МИГАНИЯ
+                # ВАЖНЫЙ МАРКЕР: НАЧАЛО ИНТЕРВАЛА СТИМУЛЯЦИИ
                 self.experiment_instance.send_event_marker(
-                    "FLASH_INTERVAL_START",
+                    "STIMULUS_INTERVAL_START",
                     interval=interval + 1,
                     cycle=cycle + 1,
                     target_symbol=self.target_symbol,
@@ -543,46 +645,76 @@ class ExperimentWindow:
                     target_state=self.patterns[target_index][interval]
                     if target_index != -1
                     else 0,
+                    stimulus_type=self.stimulus_type,
+                    motion_type=self.motion_type
                 )
 
-                # Фаза 1: Короткая белая вспышка для символов, у которых в следующем бите будет 1
-                # (только для битов, которые будут 1 в текущем интервале)
+                # Применяем стимуляцию в зависимости от типа
                 for i, label in enumerate(self.labels):
                     if i < len(self.patterns):
-                        if self.patterns[i][interval] == 1:
-                            # Белая вспышка для символов, которые будут 1 в этом интервале
-                            if i == target_index:
-                                label.config(fg=self.theme["symbol_target_1"])
+                        active = self.patterns[i][interval] == 1
+                        
+                        if self.stimulus_type == "Мигание":
+                            # Только мигание
+                            if active:
+                                if i == target_index:
+                                    label.config(fg=self.theme["symbol_target_1"])
+                                else:
+                                    label.config(fg=self.theme["symbol_custom_1"])
                             else:
-                                label.config(fg=self.theme["symbol_custom_1"])
-                        else:
-                            # Для символов с 0 оставляем серый
+                                if i == target_index:
+                                    label.config(fg=self.theme["symbol_target_0"])
+                                else:
+                                    label.config(fg=self.theme["symbol_custom_0"])
+                                    
+                        elif self.stimulus_type == "Движение":
+                            # Только движение
+                            self._apply_motion(label, active, interval)
+                            # Сохраняем цветовую схему
                             if i == target_index:
-                                label.config(fg=self.theme["symbol_target_0"])
+                                label.config(fg=self.theme["symbol_target_1"] if active else self.theme["symbol_target_0"])
                             else:
-                                label.config(fg=self.theme["symbol_custom_0"])
+                                label.config(fg=self.theme["symbol_custom_1"] if active else self.theme["symbol_custom_0"])
+                                
+                        elif self.stimulus_type == "Комбинированный":
+                            # Комбинированный: и мигание, и движение
+                            if active:
+                                if i == target_index:
+                                    label.config(fg=self.theme["symbol_target_1"])
+                                else:
+                                    label.config(fg=self.theme["symbol_custom_1"])
+                            else:
+                                if i == target_index:
+                                    label.config(fg=self.theme["symbol_target_0"])
+                                else:
+                                    label.config(fg=self.theme["symbol_custom_0"])
+                            self._apply_motion(label, active, interval)
 
-                # Очень короткая задержка для вспышки (20% от интервала)
+                # Очень короткая задержка для визуального эффекта (20% от интервала)
                 time.sleep(self.experiment_instance.base_interval * 0.1)
 
-                # Фаза 2: Основное состояние - все символы серые
-                for i, label in enumerate(self.labels):
-                    if i < len(self.patterns):
-                        if self.patterns[i][interval] == 1:
-                            # Символы с 1 становятся серыми после вспышки
-                            if i == target_index:
-                                label.config(fg=self.theme["symbol_target_0"])
-                            else:
-                                label.config(fg=self.theme["symbol_custom_0"])
-                        else:
-                            # Символы с 0 остаются серыми
-                            if i == target_index:
-                                label.config(fg=self.theme["symbol_target_0"])
-                            else:
-                                label.config(fg=self.theme["symbol_custom_0"])
+                # Фаза 2: Основное состояние
+                if self.stimulus_type == "Мигание" or self.stimulus_type == "Комбинированный":
+                    for i, label in enumerate(self.labels):
+                        if i < len(self.patterns):
+                            active = self.patterns[i][interval] == 1
+                            if active:
+                                # Символы с 1 становятся серыми после вспышки
+                                if i == target_index:
+                                    label.config(fg=self.theme["symbol_target_0"])
+                                else:
+                                    label.config(fg=self.theme["symbol_custom_0"])
 
                 # Оставшаяся часть интервала
                 time.sleep(self.experiment_instance.base_interval * 0.9)
+
+                # Сбрасываем движение в конце интервала
+                if self.stimulus_type != "Мигание":
+                    for i, label in enumerate(self.labels):
+                        if i < len(self.patterns):
+                            active = self.patterns[i][interval] == 1
+                            if active:
+                                self._apply_motion(label, False, interval)
 
             # ВАЖНЫЙ МАРКЕР: КОНЕЦ ЦИКЛА
             self.experiment_instance.send_event_marker(
@@ -590,6 +722,8 @@ class ExperimentWindow:
                 cycle=cycle + 1,
                 target_symbol=self.target_symbol,
                 total_intervals=self.experiment_instance.codelen,
+                stimulus_type=self.stimulus_type,
+                motion_type=self.motion_type
             )
 
         self.current_interval = 0
@@ -604,9 +738,16 @@ class ExperimentWindow:
 
         self._update_progress_display()
 
-        # Сбрасываем цвета всех символов (ТОЛЬКО ЦВЕТ ТЕКСТА)
+        # Сбрасываем все свойства символов
         for label in self.labels:
-            label.config(fg=self.theme["text_tertiary"])
+            # Сбрасываем движение и возвращаем в исходное положение
+            props = self.symbol_properties[label]
+            label.place(x=props['base_x'], y=props['base_y'], anchor="center")
+            label.config(
+                font=("Segoe UI", props['font_size'], "bold"),
+                fg=self.theme["text_tertiary"],
+                bg=self.theme["bg_primary"]
+            )
 
         self.output_text += self.target_symbol
 
@@ -616,6 +757,8 @@ class ExperimentWindow:
             symbol=self.target_symbol,
             output_text=self.output_text,
             index=self.current_target_index,
+            stimulus_type=self.stimulus_type,
+            motion_type=self.motion_type
         )
         
         # Обновляем индикатор статуса
@@ -640,6 +783,8 @@ class ExperimentWindow:
             "EXPERIMENT_END",
             final_text=self.output_text,
             total_symbols=len(self.target_symbols),
+            stimulus_type=self.stimulus_type,
+            motion_type=self.motion_type
         )
         
         # Обновляем индикатор статуса
@@ -651,13 +796,13 @@ class ExperimentWindow:
         result_window = tk.Toplevel(self.window)
         result_window.title("Эксперимент завершен")
         result_window.configure(bg=self.theme["bg_primary"])
-        result_window.geometry("600x400")
+        result_window.geometry("600x450")
         result_window.resizable(False, False)
         
         # Центрируем окно
         x = (self.screen_width - 600) // 2
-        y = (self.screen_height - 400) // 2
-        result_window.geometry(f"600x400+{x}+{y}")
+        y = (self.screen_height - 450) // 2
+        result_window.geometry(f"600x450+{x}+{y}")
         
         # Содержимое
         canvas = tk.Canvas(result_window, bg=self.theme["bg_primary"], highlightthickness=0)
@@ -670,7 +815,7 @@ class ExperimentWindow:
             font=("Segoe UI", 72),
             bg=self.theme["bg_primary"],
             fg=self.theme["accent_success"],
-        ).place(relx=0.5, rely=0.3, anchor="center")
+        ).place(relx=0.5, rely=0.25, anchor="center")
         
         # Заголовок
         tk.Label(
@@ -679,7 +824,7 @@ class ExperimentWindow:
             font=("Segoe UI", 24, "bold"),
             bg=self.theme["bg_primary"],
             fg=self.theme["text_primary"],
-        ).place(relx=0.5, rely=0.5, anchor="center")
+        ).place(relx=0.5, rely=0.4, anchor="center")
         
         # Результат
         tk.Label(
@@ -688,16 +833,22 @@ class ExperimentWindow:
             font=("Consolas", 14),
             bg=self.theme["bg_primary"],
             fg=self.theme["accent_primary"],
-        ).place(relx=0.5, rely=0.6, anchor="center")
+        ).place(relx=0.5, rely=0.5, anchor="center")
         
         # Параметры
+        params_text = f"Тип стимула: {self.stimulus_type}\n"
+        if self.stimulus_type != "Мигание":
+            params_text += f"Тип движения: {self.motion_type}\n"
+        params_text += f"Параметры: {self.experiment_instance.num_cycles} циклов × {self.experiment_instance.cycle_duration} сек"
+        
         tk.Label(
             canvas,
-            text=f"Параметры: {self.experiment_instance.num_cycles} циклов × {self.experiment_instance.cycle_duration} сек",
+            text=params_text,
             font=("Segoe UI", 12),
             bg=self.theme["bg_primary"],
             fg=self.theme["text_secondary"],
-        ).place(relx=0.5, rely=0.7, anchor="center")
+            justify="center"
+        ).place(relx=0.5, rely=0.65, anchor="center")
         
         # Кнопка закрытия
         close_button = tk.Button(

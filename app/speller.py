@@ -1,17 +1,14 @@
+# [file name]: speller.py
 import logging
 import sys
-import threading
-import time
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox
 
 from pylsl import StreamInfo, StreamOutlet
 
-from app.code_generator import CodeGen
 from app.get_logger import setup_logger
 from app.theme import ThemeManager
-from app.experiment_window import ExperimentWindow
-from app.preparation_window import PreparationWindow
+
 
 class SSVEPSpellerExperiment:
     def __init__(self, root):
@@ -97,9 +94,10 @@ class SSVEPSpellerExperiment:
         self.logger.info("Показ окна подготовки")
         if self.current_window:
             self.current_window.window.destroy()
+        from app.preparation_window import PreparationWindow
         self.current_window = PreparationWindow(self._start_experiment_from_prep, self.root, self.theme_manager, self)
 
-    def _start_experiment_from_prep(self, text, codelen, cycle_duration, num_cycles):
+    def _start_experiment_from_prep(self, text, codelen, cycle_duration, num_cycles, stimulus_type="Мигание", motion_type="Дрожание"):
         """Начинает эксперимент с параметрами из окна подготовки"""
         try:
             self.codelen = int(codelen)
@@ -117,20 +115,23 @@ class SSVEPSpellerExperiment:
                 codelen=self.codelen,
                 duration=self.cycle_duration,
                 cycles=self.num_cycles,
+                stimulus_type=stimulus_type,
+                motion_type=motion_type
             )
 
-            self._setup_experiment(text.upper())
+            self._setup_experiment(text.upper(), stimulus_type, motion_type)
 
         except ValueError as e:
             self.logger.critical(f"Некорректные данные: {e}")
             messagebox.showerror("Ошибка", f"Некорректные данные: {e}")
 
-    def _setup_experiment(self, text):
+    def _setup_experiment(self, text, stimulus_type, motion_type):
         """Настраивает и запускает главное окно эксперимента"""
         self.logger.info("Настройка эксперимента")
         if self.current_window:
             self.current_window.window.destroy()
-        self.current_window = ExperimentWindow(self.root, self.theme_manager, self, text)
+        from app.experiment_window import ExperimentWindow
+        self.current_window = ExperimentWindow(self.root, self.theme_manager, self, text, stimulus_type, motion_type)
 
     def _toggle_theme(self):
         """Переключение темы для всего приложения"""
