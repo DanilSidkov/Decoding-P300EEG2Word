@@ -1,7 +1,7 @@
 import sys
 import tkinter as tk
 from tkinter import font
-
+from monitor_config import setup_window_on_target_monitor
 
 class WelcomeWindow:
     def __init__(self, parent_callback, root_window, theme_manager):
@@ -12,9 +12,11 @@ class WelcomeWindow:
 
         self.window = tk.Toplevel()
         self.window.title("BCI Speller - Добро пожаловать")
-        
-        # Используем тему
-        self.window.attributes("-fullscreen", True)
+
+        # Настраиваем окно на целевом мониторе
+        if not setup_window_on_target_monitor(self.window):
+            # Если не удалось, используем обычный fullscreen
+            self.window.attributes("-fullscreen", True)
         
         # Холст для эффектов
         self.canvas = tk.Canvas(self.window, bg=self.theme["bg_primary"], highlightthickness=0)
@@ -163,17 +165,6 @@ class WelcomeWindow:
             justify="center",
         ).pack()
         
-        # Индикатор прогресса
-        progress_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
-        progress_frame.pack(pady=(0, 30))
-        
-        self.progress_canvas = tk.Canvas(progress_frame, width=200, height=4, 
-                                        bg=self.theme["bg_primary"], highlightthickness=0)
-        self.progress_canvas.pack()
-        self.progress_canvas.create_rectangle(0, 0, 200, 4, 
-                                            fill=self.theme["bg_tertiary"], outline="")
-        self.progress_canvas.create_rectangle(0, 0, 50, 4, 
-                                            fill=self.theme["accent_primary"], outline="")
         
         # Стилизованная кнопка продолжения
         button_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])

@@ -1,6 +1,6 @@
 import sys
 import tkinter as tk
-
+from monitor_config import setup_window_on_target_monitor
 
 class TargetWindow:
     """Окно для отображения целевого символа"""
@@ -18,8 +18,10 @@ class TargetWindow:
         self.window = tk.Toplevel(parent)
         self.window.title(f"BCI Speller - Целевой символ: {self.symbol}")
         
-        # Используем тему
-        self.window.attributes("-fullscreen", True)
+        # Настраиваем окно на целевом мониторе
+        if not setup_window_on_target_monitor(self.window):
+            # Если не удалось, используем обычный fullscreen
+            self.window.attributes("-fullscreen", True)
         self.window.configure(bg=self.theme["bg_primary"])
         
         # Холст для эффектов

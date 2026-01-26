@@ -25,6 +25,7 @@ dependencies = [
     "moabb>=1.4.2",
     "mne>=1.11.0",
     "pylsl>=1.18.1",
+    "screeninfo>=0.8.1",
 ]
 requires-python = "==3.10.4"
 readme = "README.md"

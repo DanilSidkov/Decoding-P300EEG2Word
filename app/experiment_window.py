@@ -8,7 +8,7 @@ from tkinter import messagebox, ttk
 
 from app.code_generator import CodeGen
 from app.theme import ThemeManager
-
+from monitor_config import setup_window_on_target_monitor
 
 class ExperimentWindow:
     """Главное окно эксперимента"""
@@ -25,8 +25,10 @@ class ExperimentWindow:
         self.window = root_window
         self.window.title("BCI Speller - Эксперимент")
         
-        # Используем тему
-        self.window.attributes("-fullscreen", True)
+        # Настраиваем окно на целевом мониторе
+        if not setup_window_on_target_monitor(self.window):
+            # Если не удалось, используем обычный fullscreen
+            self.window.attributes("-fullscreen", True)
         
         # Холст для эффектов
         self.canvas = tk.Canvas(self.window, bg=self.theme["bg_primary"], highlightthickness=0)

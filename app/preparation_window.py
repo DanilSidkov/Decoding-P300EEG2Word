@@ -2,7 +2,7 @@
 import sys
 import tkinter as tk
 from tkinter import ttk, messagebox
-
+from monitor_config import setup_window_on_target_monitor
 
 class PreparationWindow:
     """Окно подготовки к эксперименту"""
@@ -17,8 +17,10 @@ class PreparationWindow:
         self.window = tk.Toplevel()
         self.window.title("BCI Speller - Настройки")
         
-        # Используем тему
-        self.window.attributes("-fullscreen", True)
+        # Настраиваем окно на целевом мониторе
+        if not setup_window_on_target_monitor(self.window):
+            # Если не удалось, используем обычный fullscreen
+            self.window.attributes("-fullscreen", True)
         
         # Холст для эффектов
         self.canvas = tk.Canvas(self.window, bg=self.theme["bg_primary"], highlightthickness=0)
@@ -109,8 +111,10 @@ class PreparationWindow:
     def _create_main_content(self):
         """Создает основной контент окна"""
         # Основной контейнер
+        screen_width = self.window.winfo_width()
+        screen_height = self.window.winfo_height()
         main_container = tk.Frame(self.canvas, bg=self.theme["bg_primary"])
-        main_container.place(relx=0.5, rely=0.5, anchor="center", width=900, height=700)
+        main_container.place(relx=0.5, rely=0.5, anchor="center", width=screen_width//2, height=int(screen_height*0.8))
 
         # Заголовок
         tk.Label(

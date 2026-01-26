@@ -1,7 +1,7 @@
 import sys
 import tkinter as tk
 from tkinter import ttk
-
+from monitor_config import setup_window_on_target_monitor
 
 class InstructionWindow:
     def __init__(self, parent_callback, root_window, theme_manager):
@@ -13,8 +13,10 @@ class InstructionWindow:
         self.window = tk.Toplevel()
         self.window.title("BCI Speller - Инструкция")
         
-        # Используем тему
-        self.window.attributes("-fullscreen", True)
+        # Настраиваем окно на целевом мониторе
+        if not setup_window_on_target_monitor(self.window):
+            # Если не удалось, используем обычный fullscreen
+            self.window.attributes("-fullscreen", True)
         
         # Холст для эффектов
         self.canvas = tk.Canvas(self.window, bg=self.theme["bg_primary"], highlightthickness=0)

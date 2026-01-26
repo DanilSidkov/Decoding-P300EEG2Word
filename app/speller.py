@@ -8,7 +8,7 @@ from pylsl import StreamInfo, StreamOutlet
 
 from app.get_logger import setup_logger
 from app.theme import ThemeManager
-
+from monitor_config import setup_window_on_target_monitor
 
 class SSVEPSpellerExperiment:
     def __init__(self, root):
@@ -20,7 +20,10 @@ class SSVEPSpellerExperiment:
         self.theme_manager = ThemeManager()
         self.theme = self.theme_manager.get_theme()
 
-        self.root.attributes("-fullscreen", True)
+        # Настраиваем окно на целевом мониторе
+        if not setup_window_on_target_monitor(self.root):
+            # Если не удалось, используем обычный fullscreen
+            self.root.attributes("-fullscreen", True)
         self.root.configure(bg=self.theme["bg_primary"])
         
         self.root.bind("<Escape>", self._exit_program)
