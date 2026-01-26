@@ -25,6 +25,10 @@ class ThemeManager:
         "scrollbar_trough": "#1a2238",# Фон полосы прокрутки
         "entry_bg": "#1a2238",        # Фон поля ввода
         "entry_fg": "#ffffff",        # Текст поля ввода
+        "symbol_target_0":"#111723", # Таргетного символа в неактивном состоянии
+        "symbol_custom_0":"#111723",  # Цвет обычного символа в неактивном состоянии
+        "symbol_target_1":"#ffffff",  # Таргетного символа в активном состоянии
+        "symbol_custom_1":"#ffffff"   # Цвет обычного символа в активном состоянии
     }
     
     # Светлая тема
@@ -33,9 +37,9 @@ class ThemeManager:
         "bg_primary": "#f5f7fa",      # Основной фон
         "bg_secondary": "#e1e8f0",    # Вторичный фон
         "bg_tertiary": "#d1d9e6",     # Третичный фон
-        "text_primary": "#2c3e50",    # Основной текст
-        "text_secondary": "#5d6d7e",  # Вторичный текст
-        "text_tertiary": "#7f8c8d",   # Третичный текст
+        "text_primary": "#000000",    # Основной текст
+        "text_secondary": "#adb8c4",  # Вторичный текст
+        "text_tertiary": "#cbbcbc",   # Третичный текст
         "accent_primary": "#2980b9",  # Основной акцент
         "accent_secondary": "#27ae60",# Вторичный акцент
         "accent_warning": "#c0392b",  # Цвет предупреждения
@@ -50,6 +54,10 @@ class ThemeManager:
         "scrollbar_trough": "#e1e8f0",# Фон полосы прокрутки
         "entry_bg": "#ffffff",        # Фон поля ввода
         "entry_fg": "#2c3e50",        # Текст поля ввода
+        "symbol_target_0": "#eceef1", # Таргетного символа в неактивном состоянии
+        "symbol_custom_0":"#eceef1",  # Цвет обычного символа в неактивном состоянии
+        "symbol_target_1":"#000000",  # Таргетного символа в активном состоянии
+        "symbol_custom_1":"#000000"   # Цвет обычного символа в активном состоянии
     }
     
     def __init__(self):

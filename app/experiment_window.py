@@ -86,28 +86,11 @@ class ExperimentWindow:
         self.window.configure(bg=self.theme["bg_primary"])
         self.canvas.configure(bg=self.theme["bg_primary"])
         
-        # Создаем фоновые эффекты
-        self._create_background_effects()
-        
         # Создаем кнопки управления (тема и выход)
         self._create_control_buttons()
         
         # Создаем основной контент
         self._create_main_content()
-
-    def _create_background_effects(self):
-        """Создает фоновые эффекты для главного окна"""
-        width = self.screen_width
-        height = self.screen_height
-        
-        # Динамические линии
-        for i in range(10):
-            x1 = width // 10 * i
-            y1 = 0
-            x2 = width // 10 * (10 - i)
-            y2 = height
-            self.canvas.create_line(x1, y1, x2, y2, 
-                                   fill=self.theme["canvas_outline"], width=1)
 
     def _create_control_buttons(self):
         """Создает кнопки управления (тема и выход)"""
@@ -381,24 +364,6 @@ class ExperimentWindow:
             )
             label.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
             self.labels.append(label)
-            
-            # Эффект при наведении (опционально)
-            def on_enter(e, l=label, s=symbol):
-                if self.target_symbol == s and self.is_running:
-                    l.config(fg=self.theme["text_primary"])
-                elif not self.is_running:
-                    l.config(fg=self.theme["text_secondary"])
-                    
-            def on_leave(e, l=label, s=symbol):
-                if self.target_symbol == s and self.is_running:
-                    l.config(fg=self.theme["text_tertiary"])
-                elif not self.is_running:
-                    l.config(fg=self.theme["text_tertiary"])
-                else:
-                    l.config(fg=self.theme["text_tertiary"])
-            
-            label.bind("<Enter>", on_enter)
-            label.bind("<Leave>", on_leave)
 
     def _create_glow_effect(self, widget, color=None):
         """Создает эффект свечения для виджета"""
@@ -513,9 +478,9 @@ class ExperimentWindow:
         if target_index != -1:
             for i, label in enumerate(self.labels):
                 if i == target_index:
-                    label.config(fg=self.theme["text_tertiary"])
+                    label.config(fg=self.theme["symbol_target_0"])
                 else:
-                    label.config(fg=self.theme["text_tertiary"])
+                    label.config(fg=self.theme["symbol_custom_0"])
 
     def _update_progress_display(self):
         """Обновляет отображение прогресса мигания"""
@@ -587,15 +552,15 @@ class ExperimentWindow:
                         if self.patterns[i][interval] == 1:
                             # Белая вспышка для символов, которые будут 1 в этом интервале
                             if i == target_index:
-                                label.config(fg=self.theme["text_primary"])
+                                label.config(fg=self.theme["symbol_target_1"])
                             else:
-                                label.config(fg=self.theme["text_primary"])
+                                label.config(fg=self.theme["symbol_custom_1"])
                         else:
                             # Для символов с 0 оставляем серый
                             if i == target_index:
-                                label.config(fg=self.theme["text_tertiary"])
+                                label.config(fg=self.theme["symbol_target_0"])
                             else:
-                                label.config(fg=self.theme["text_tertiary"])
+                                label.config(fg=self.theme["symbol_custom_0"])
 
                 # Очень короткая задержка для вспышки (20% от интервала)
                 time.sleep(self.experiment_instance.base_interval * 0.1)
@@ -606,15 +571,15 @@ class ExperimentWindow:
                         if self.patterns[i][interval] == 1:
                             # Символы с 1 становятся серыми после вспышки
                             if i == target_index:
-                                label.config(fg=self.theme["text_tertiary"])
+                                label.config(fg=self.theme["symbol_target_0"])
                             else:
-                                label.config(fg=self.theme["text_tertiary"])
+                                label.config(fg=self.theme["symbol_custom_0"])
                         else:
                             # Символы с 0 остаются серыми
                             if i == target_index:
-                                label.config(fg=self.theme["text_tertiary"])
+                                label.config(fg=self.theme["symbol_target_0"])
                             else:
-                                label.config(fg=self.theme["text_tertiary"])
+                                label.config(fg=self.theme["symbol_custom_0"])
 
                 # Оставшаяся часть интервала
                 time.sleep(self.experiment_instance.base_interval * 0.9)
