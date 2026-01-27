@@ -42,6 +42,7 @@ class PreparationWindow:
         self.window.configure(bg=self.theme["bg_primary"])
         self.canvas.configure(bg=self.theme["bg_primary"])
         
+        self.window.update_idletasks()
         # Создаем фоновые эффекты
         self._create_background_effects()
         
@@ -111,8 +112,8 @@ class PreparationWindow:
     def _create_main_content(self):
         """Создает основной контент окна"""
         # Основной контейнер
-        screen_width = self.window.winfo_width()
-        screen_height = self.window.winfo_height()
+        screen_width = self.window.winfo_screenwidth()
+        screen_height = self.window.winfo_screenheight()
         main_container = tk.Frame(self.canvas, bg=self.theme["bg_primary"])
         main_container.place(relx=0.5, rely=0.5, anchor="center", width=screen_width//2, height=int(screen_height*0.8))
 

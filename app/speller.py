@@ -99,6 +99,8 @@ class SSVEPSpellerExperiment:
             self.current_window.window.destroy()
         from app.preparation_window import PreparationWindow
         self.current_window = PreparationWindow(self._start_experiment_from_prep, self.root, self.theme_manager, self)
+        self.current_window.window.deiconify()
+        self.current_window.window.lift()
 
     def _start_experiment_from_prep(self, text, codelen, cycle_duration, num_cycles, stimulus_type="Мигание", motion_type="Дрожание"):
         """Начинает эксперимент с параметрами из окна подготовки"""
