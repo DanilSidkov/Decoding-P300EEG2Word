@@ -235,7 +235,7 @@ class PreparationWindow:
         self.motion_type = tk.StringVar(value="Дрожание")
         
         # Выпадающий список для типа движения
-        motion_options = ["Дрожание", "Колебание размера"]
+        motion_options = ["Дрожание", "Колебание размера", "Направленное движение"]
         self.motion_combo = ttk.Combobox(
             motion_group,
             textvariable=self.motion_type,
@@ -375,12 +375,14 @@ class PreparationWindow:
         start_button.pack()
         self._create_glow_effect(start_button, self.theme["accent_success"])
 
+    # Обновим метод _update_motion_desc:
     def _update_motion_desc(self, event=None):
         """Обновляет описание выбранного типа движения"""
         motion_type = self.motion_type.get()
         descriptions = {
-            "Дрожание": "Дрожание: буква слегка вибрирует на месте (1-2 пикселя)",
+            "Дрожание": "Дрожание: буква вибрирует случайным образом (1-2 пикселя)",
             "Колебание размера": "Колебание размера: буква плавно увеличивается и уменьшается",
+            "Направленное движение": "Направленное движение: буква двигается в 8 направлениях (N, NE, E, SE, S, SW, W, NW) с двумя амплитудами (малая: 2px, большая: 5px)"
         }
         self.motion_desc.config(text=descriptions.get(motion_type, ""))
 

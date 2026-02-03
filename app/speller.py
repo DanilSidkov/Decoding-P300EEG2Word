@@ -56,15 +56,26 @@ class SSVEPSpellerExperiment:
         self.current_window = None
 
     def send_event_marker(self, event_type, **kwargs):
-        """Отправка маркера события через LSL"""
+        """Отправка маркера события через LSL с поддержкой движения"""
         formatted_kwargs = {}
         for key, value in kwargs.items():
             if key == "states" and isinstance(value, str) and len(value) == 36:
                 formatted_kwargs[key] = value
             else:
                 formatted_kwargs[key] = value
+        
+        # Добавляем информацию о движении, если она есть
+        if 'movement_direction' in kwargs:
+            movement_info = {
+                'direction': kwargs.get('movement_direction', 'N'),
+                'direction_idx': kwargs.get('movement_direction_idx', 0),
+                'amplitude': kwargs.get('movement_amplitude', 'small'),
+                'amplitude_idx': kwargs.get('movement_amplitude_idx', 0),
+                'description': kwargs.get('movement_description', 'N_small')
+            }
+            formatted_kwargs['movement'] = movement_info
+        
         marker_string = f"{event_type} - {formatted_kwargs}"
-
         self.outlet.push_sample([marker_string])
         self.logger.info(f"Событие: {event_type} {formatted_kwargs}")
 

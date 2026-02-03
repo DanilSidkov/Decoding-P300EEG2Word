@@ -5,6 +5,7 @@ import time
 import tkinter as tk
 import math
 from tkinter import messagebox, ttk
+import random
 
 from app.code_generator import CodeGen
 from app.theme import ThemeManager
@@ -34,6 +35,11 @@ class ExperimentWindow:
         self.canvas = tk.Canvas(self.window, bg=self.theme["bg_primary"], highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         
+        # Добавить направления и амплитуды движения
+        self.directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']  # 8 направлений
+        self.amplitudes = ['small', 'large']  # 2 амплитуды
+        
+
         # Привязка клавиш
         self.window.bind("<Escape>", self._exit_program)
         self.window.protocol("WM_DELETE_WINDOW", self._exit_program)
@@ -57,9 +63,35 @@ class ExperimentWindow:
         
         # Инициализация символов и паттернов
         self.setup_symbols()
-        
+        self.movement_patterns = self._generate_movement_patterns()
         # Создаем все виджеты
         self._create_ui()
+
+    def _generate_movement_patterns(self):
+        """Генерирует паттерны движения для всех символов"""
+        movement_patterns = {}
+        
+        for i, symbol in enumerate(self.symbols):
+            # Для каждого символа создаем список движений для каждого интервала
+            symbol_movements = []
+            for interval in range(self.experiment_instance.codelen):
+                # Случайное направление (0-7)
+                direction_idx = random.randint(0, len(self.directions) - 1)
+                # Случайная амплитуда (0-1)
+                amplitude_idx = random.randint(0, len(self.amplitudes) - 1)
+                
+                movement = {
+                    'direction': self.directions[direction_idx],
+                    'direction_idx': direction_idx,
+                    'amplitude': self.amplitudes[amplitude_idx],
+                    'amplitude_idx': amplitude_idx,
+                    'active': self.patterns[i][interval] == 1 if i < len(self.patterns) else 0
+                }
+                symbol_movements.append(movement)
+            
+            movement_patterns[symbol] = symbol_movements
+        
+        return movement_patterns
 
     def setup_symbols(self):
         """Настройка символов"""
@@ -569,6 +601,19 @@ class ExperimentWindow:
             label.config(font=("Segoe UI", props['font_size'], "bold"))
             return
         
+        # Получаем движение для текущего символа и интервала
+        symbol = self.symbol_properties[label]['symbol']
+        if symbol in self.movement_patterns and interval < len(self.movement_patterns[symbol]):
+            movement = self.movement_patterns[symbol][interval]
+        else:
+            # Если движения нет, используем значения по умолчанию
+            movement = {
+                'direction': 'N',
+                'direction_idx': 0,
+                'amplitude': 'small',
+                'amplitude_idx': 0
+            }
+        
         # Вычисляем фазу движения на основе интервала
         phase = (interval % 10) / 10.0 * 2 * math.pi
         
@@ -582,7 +627,7 @@ class ExperimentWindow:
         base_y = props['row'] * cell_height + cell_height // 2
         
         if self.motion_type == "Дрожание":
-            # Дрожание: небольшие случайные смещения
+            # Дрожание: случайные смещения
             import random
             x_offset = random.randint(-4, 4)
             y_offset = random.randint(-4, 4)
@@ -595,6 +640,67 @@ class ExperimentWindow:
             font_size = int(props['font_size'] * scale)
             label.config(font=("Segoe UI", font_size, "bold"))
             label.place(x=base_x, y=base_y, anchor="center")
+            
+        elif self.motion_type == "Направленное движение":
+            # Направленное движение: в 8 направлениях с 2 амплитудами
+            direction = movement['direction']
+            amplitude = 4 if movement['amplitude'] == 'small' else 8
+            
+            # Добавляем небольшую синусоидальную модуляцию для "колебания"
+            oscillation = math.sin(phase * 4) * 0.5
+            
+            # Вычисляем смещение в зависимости от направления
+            dx, dy = self._get_direction_offset(direction, amplitude, oscillation)
+            
+            label.place(x=base_x + dx, y=base_y + dy, anchor="center")
+
+    def _get_direction_offset(self, direction, amplitude, phase):
+        """Возвращает смещение (dx, dy) для заданного направления"""
+        # Добавляем небольшую синусоидальную модуляцию для "колебания"
+        oscillation = math.sin(phase * 4) * 0.3
+        
+        if direction == 'N':    # Север
+            return 0, -(amplitude + oscillation)
+        elif direction == 'NE':  # Северо-восток
+            offset = amplitude / math.sqrt(2)
+            return offset + oscillation, -(offset + oscillation)
+        elif direction == 'E':   # Восток
+            return amplitude + oscillation, 0
+        elif direction == 'SE':  # Юго-восток
+            offset = amplitude / math.sqrt(2)
+            return offset + oscillation, offset + oscillation
+        elif direction == 'S':   # Юг
+            return 0, amplitude + oscillation
+        elif direction == 'SW':  # Юго-запад
+            offset = amplitude / math.sqrt(2)
+            return -(offset + oscillation), offset + oscillation
+        elif direction == 'W':   # Запад
+            return -(amplitude + oscillation), 0
+        elif direction == 'NW':  # Северо-запад
+            offset = amplitude / math.sqrt(2)
+            return -(offset + oscillation), -(offset + oscillation)
+        else:
+            return 0, 0
+
+    # В класс ExperimentWindow добавить:
+    def get_movement_info_for_marker(self, symbol, interval):
+        """Возвращает информацию о движении для маркера LSL"""
+        if symbol in self.movement_patterns and interval < len(self.movement_patterns[symbol]):
+            movement = self.movement_patterns[symbol][interval]
+            return {
+                'direction': movement['direction'],
+                'direction_idx': movement['direction_idx'],
+                'amplitude': movement['amplitude'],
+                'amplitude_idx': movement['amplitude_idx'],
+                'description': f"{movement['direction']}_{movement['amplitude']}"
+            }
+        return {
+            'direction': 'N',
+            'direction_idx': 0,
+            'amplitude': 'small',
+            'amplitude_idx': 0,
+            'description': 'N_small'
+        }
 
     def _stimulation_sequence(self):
         """Выполняет последовательность стимуляции с маркерами"""
@@ -636,6 +742,24 @@ class ExperimentWindow:
 
                 states_str = "".join(str(s) for s in states)
 
+                # Получаем информацию о движении для целевого символа
+                target_movement = {}
+                if target_index != -1 and self.target_symbol in self.movement_patterns:
+                    target_movement_info = self.movement_patterns[self.target_symbol][interval]
+                    target_movement = {
+                        'direction': target_movement_info['direction'],
+                        'direction_idx': target_movement_info['direction_idx'],
+                        'amplitude': target_movement_info['amplitude'],
+                        'amplitude_idx': target_movement_info['amplitude_idx']
+                    }
+                else:
+                    target_movement = {
+                        'direction': 'N',
+                        'direction_idx': 0,
+                        'amplitude': 'small',
+                        'amplitude_idx': 0
+                    }
+                target_movement = self.get_movement_info_for_marker(self.target_symbol, interval)
                 # ВАЖНЫЙ МАРКЕР: НАЧАЛО ИНТЕРВАЛА СТИМУЛЯЦИИ
                 self.experiment_instance.send_event_marker(
                     "STIMULUS_INTERVAL_START",
@@ -644,11 +768,15 @@ class ExperimentWindow:
                     target_symbol=self.target_symbol,
                     target_index=target_index,
                     states=states_str,
-                    target_state=self.patterns[target_index][interval]
-                    if target_index != -1
-                    else 0,
+                    target_state=self.patterns[target_index][interval] if target_index != -1 else 0,
                     stimulus_type=self.stimulus_type,
-                    motion_type=self.motion_type
+                    motion_type=self.motion_type,
+                    # Добавляем информацию о движении
+                    movement_direction=target_movement['direction'],
+                    movement_direction_idx=target_movement['direction_idx'],
+                    movement_amplitude=target_movement['amplitude'],
+                    movement_amplitude_idx=target_movement['amplitude_idx'],
+                    movement_description=target_movement['description']
                 )
 
                 # Применяем стимуляцию в зависимости от типа
