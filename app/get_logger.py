@@ -2,7 +2,7 @@ import datetime
 import logging
 import logging.handlers
 from pathlib import Path
-
+import time
 import colorlog
 
 
@@ -14,18 +14,14 @@ class MicrosecondFormatter(colorlog.ColoredFormatter):
         ct = self.converter(record.created)
         if datefmt:
             if "%f" in datefmt:
-                # Используем datetime для микросекунд
                 dt = datetime.datetime.fromtimestamp(record.created)
-                # Заменяем %f на фактическое значение микросекунд
                 formatted = dt.strftime(
                     datefmt.replace("%f", str(dt.microsecond).zfill(6))
                 )
                 return formatted
             else:
-                # Стандартное форматирование
                 return time.strftime(datefmt, ct)
         else:
-            # Стандартное форматирование без datefmt
             t = time.strftime(self.default_time_format, ct)
             return t
 
@@ -48,7 +44,7 @@ def setup_logger(logger: logging.Logger, file_name: str = "logging") -> None:
     formatter = MicrosecondFormatter(
         "%(white)s%(asctime)s - %(funcName)s:%(lineno)d - "
         "%(log_color)s%(levelname) -8s%(reset)s%(cyan)s%(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S.%f",  # Теперь поддерживает микросекунды
+        datefmt="%Y-%m-%d %H:%M:%S.%f",
         log_colors={
             "DEBUG": "cyan",
             "INFO": "green",
@@ -59,21 +55,16 @@ def setup_logger(logger: logging.Logger, file_name: str = "logging") -> None:
     )
     logger.setLevel(logging.DEBUG)
 
-    # Console handler
     c_handler = logging.StreamHandler()
     c_handler.setLevel(logger.level)
     c_handler.setFormatter(formatter)
     logger.addHandler(c_handler)
 
-    # File handler - создаем путь к .app/logs
     current_file_path = Path(__file__).resolve()
-
-    # Находим директорию .app (где находится get_logger.py)
     app_dir = current_file_path.parent
 
-    # Создаем путь к папке logs внутри .app
     logs_dir = app_dir / "logs"
-    logs_dir.mkdir(exist_ok=True)  # Создаем папку, если её нет
+    logs_dir.mkdir(exist_ok=True)
 
     log_file = logs_dir / f"{file_name}.log"
 

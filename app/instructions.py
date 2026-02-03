@@ -13,39 +13,29 @@ class InstructionWindow:
         self.window = tk.Toplevel()
         self.window.title("BCI Speller - Инструкция")
         
-        # Настраиваем окно на целевом мониторе
         if not setup_window_on_target_monitor(self.window):
-            # Если не удалось, используем обычный fullscreen
             self.window.attributes("-fullscreen", True)
         
-        # Холст для эффектов
         self.canvas = tk.Canvas(self.window, bg=self.theme["bg_primary"], highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         
-        # Привязка клавиш
         self.window.bind("<Escape>", self._exit_program)
         self.window.protocol("WM_DELETE_WINDOW", self._exit_program)
         self.window.bind("<space>", lambda e: self._on_continue())
 
-        # Создаем все виджеты
         self._create_ui()
 
     def _create_ui(self):
         """Создает весь интерфейс окна"""
-        # Очищаем холст
         self.canvas.delete("all")
         
-        # Устанавливаем фон окна
         self.window.configure(bg=self.theme["bg_primary"])
         self.canvas.configure(bg=self.theme["bg_primary"])
         
-        # Создаем фоновые эффекты
         self._create_background_effects()
         
-        # Создаем кнопки управления (тема и выход)
         self._create_control_buttons()
         
-        # Создаем основной контент
         self._create_main_content()
 
     def _create_background_effects(self):
@@ -53,14 +43,12 @@ class InstructionWindow:
         width = self.window.winfo_screenwidth()
         height = self.window.winfo_screenheight()
         
-        # Круговые элементы
         for i in range(5):
             x = width // 4 + i * 100
             y = height // 3 + i * 50
             self.canvas.create_oval(x-50, y-50, x+50, y+50, 
                                   outline=self.theme["canvas_outline"], width=1, dash=(5, 5))
         
-        # Линии соединения
         for i in range(10):
             x1 = width // 10 * i
             y1 = height // 5
@@ -70,7 +58,6 @@ class InstructionWindow:
 
     def _create_control_buttons(self):
         """Создает кнопки управления (тема и выход)"""
-        # Кнопка переключения темы
         self.theme_button = tk.Button(
             self.canvas,
             text="☀️" if self.theme_manager.is_dark_mode else "🌙",
@@ -92,7 +79,6 @@ class InstructionWindow:
         self.theme_button.place(x=self.window.winfo_screenwidth() - 60, y=20)
         self._create_glow_effect(self.theme_button, self.theme["accent_primary"])
 
-        # Кнопка выхода
         self.exit_button = tk.Button(
             self.canvas,
             text="✕",
@@ -113,11 +99,9 @@ class InstructionWindow:
 
     def _create_main_content(self):
         """Создает основной контент окна"""
-        # Основной контейнер
         main_container = tk.Frame(self.canvas, bg=self.theme["bg_primary"])
         main_container.place(relx=0.5, rely=0.5, anchor="center", width=900, height=700)
         
-        # Заголовок
         title_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         title_frame.pack(pady=(0, 30))
         
@@ -129,7 +113,6 @@ class InstructionWindow:
             fg=self.theme["text_primary"],
         ).pack()
         
-        # Подзаголовок
         subtitle_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         subtitle_frame.pack(pady=(0, 20))
         
@@ -141,11 +124,9 @@ class InstructionWindow:
             fg=self.theme["accent_primary"],
         ).pack()
         
-        # Контейнер для текста инструкции
         text_container = tk.Frame(main_container, bg=self.theme["bg_primary"])
         text_container.pack(fill=tk.BOTH, expand=True, pady=(0, 30))
         
-        # Создаем кастомный скроллбар
         style = ttk.Style()
         style.theme_use('clam')
         style.configure("Custom.Vertical.TScrollbar", 
@@ -158,7 +139,6 @@ class InstructionWindow:
         scroll_frame = tk.Frame(text_container, bg=self.theme["bg_primary"])
         scroll_frame.pack(fill=tk.BOTH, expand=True, padx=20)
         
-        # Текстовое поле в стиле терминала
         text_widget = tk.Text(
             scroll_frame,
             wrap=tk.WORD,
@@ -184,7 +164,6 @@ class InstructionWindow:
         text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Содержимое инструкции
         instructions = """╔═══════════════════════════════════════════════════╗
 ║           ПРОТОКОЛ ЭКСПЕРИМЕНТА SSVEP BCI           ║
 ╚═══════════════════════════════════════════════════╝
@@ -226,7 +205,6 @@ class InstructionWindow:
         
         text_widget.insert(tk.END, instructions)
         
-        # Добавляем цветовое форматирование
         text_widget.tag_add("title", "1.0", "3.0")
         text_widget.tag_config("title", foreground=self.theme["accent_primary"], font=("Consolas", 13, "bold"))
         
@@ -241,7 +219,6 @@ class InstructionWindow:
         
         text_widget.config(state=tk.DISABLED)
         
-        # Кнопка продолжения
         button_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         button_frame.pack(pady=(10, 0))
         
@@ -266,7 +243,6 @@ class InstructionWindow:
         continue_button.pack()
         self._create_glow_effect(continue_button, self.theme["accent_success"])
         
-        # Подсказка
         hint_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         hint_frame.pack(pady=(10, 0))
         
@@ -303,7 +279,6 @@ class InstructionWindow:
         
     def _update_theme(self):
         """Обновление цветов согласно теме"""
-        # Полностью пересоздаем интерфейс с новой темой
         self._create_ui()
 
     def _exit_program(self, event=None):

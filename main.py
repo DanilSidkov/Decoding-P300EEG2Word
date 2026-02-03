@@ -5,7 +5,6 @@ from app.speller import SSVEPSpellerExperiment
 
 def main():
     root = tk.Tk()
-    # Скрываем окно для настройки
     root.withdraw()
     
     app = SSVEPSpellerExperiment(root)

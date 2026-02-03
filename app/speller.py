@@ -1,4 +1,3 @@
-# [file name]: speller.py
 import logging
 import sys
 import tkinter as tk
@@ -16,19 +15,15 @@ class SSVEPSpellerExperiment:
         self.logger = logging.getLogger("BCI")
         setup_logger(self.logger, "Experiment")
 
-        # Инициализация менеджера тем
         self.theme_manager = ThemeManager()
         self.theme = self.theme_manager.get_theme()
 
-        # Настраиваем окно на целевом мониторе
         if not setup_window_on_target_monitor(self.root):
-            # Если не удалось, используем обычный fullscreen
             self.root.attributes("-fullscreen", True)
         self.root.configure(bg=self.theme["bg_primary"])
         
         self.root.bind("<Escape>", self._exit_program)
         self.root.protocol("WM_DELETE_WINDOW", self._exit_program)
-        # Горячие клавиши для переключения темы
         self.root.bind("<Control-t>", lambda e: self._toggle_theme())
         self.root.bind("<Control-T>", lambda e: self._toggle_theme())
 
@@ -52,7 +47,6 @@ class SSVEPSpellerExperiment:
         )
         self.outlet = StreamOutlet(info)
         
-        # Текущее окно
         self.current_window = None
 
     def send_event_marker(self, event_type, **kwargs):
@@ -64,7 +58,6 @@ class SSVEPSpellerExperiment:
             else:
                 formatted_kwargs[key] = value
         
-        # Добавляем информацию о движении, если она есть
         if 'movement_direction' in kwargs:
             movement_info = {
                 'direction': kwargs.get('movement_direction', 'N'),

@@ -18,13 +18,10 @@ class TargetWindow:
         self.window = tk.Toplevel(parent)
         self.window.title(f"BCI Speller - Целевой символ: {self.symbol}")
         
-        # Настраиваем окно на целевом мониторе
         if not setup_window_on_target_monitor(self.window):
-            # Если не удалось, используем обычный fullscreen
             self.window.attributes("-fullscreen", True)
         self.window.configure(bg=self.theme["bg_primary"])
         
-        # Холст для эффектов
         self.canvas = tk.Canvas(self.window, bg=self.theme["bg_primary"], highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         
@@ -33,7 +30,6 @@ class TargetWindow:
         self.window.bind("<Escape>", self._exit_program)
         self.window.protocol("WM_DELETE_WINDOW", self._exit_program)
         
-        # Кнопка переключения темы
         self.theme_button = tk.Button(
             self.canvas,
             text="☀️" if self.theme_manager.is_dark_mode else "🌙",
@@ -55,7 +51,6 @@ class TargetWindow:
         self.theme_button.place(x=self.window.winfo_screenwidth() - 60, y=20)
         self._create_glow_effect(self.theme_button, self.theme["accent_primary"])
 
-        # Стилизованная кнопка выхода
         exit_button = tk.Button(
             self.canvas,
             text="✕",
@@ -79,7 +74,6 @@ class TargetWindow:
 
         self._create_content()
         
-        # Запускаем анимацию фокуса
         self._start_focus_animation()
 
     def _create_background_effects(self):
@@ -87,13 +81,10 @@ class TargetWindow:
         width = self.window.winfo_screenwidth()
         height = self.window.winfo_screenheight()
         
-        # Очищаем холст
         self.canvas.delete("all")
         
-        # Центральная точка
         center_x, center_y = width // 2, height // 2
         
-        # Концентрические круги
         for radius in range(100, min(width, height)//2, 50):
             self.canvas.create_oval(
                 center_x - radius, center_y - radius,
@@ -102,20 +93,16 @@ class TargetWindow:
             )
 
     def _create_content(self):
-        # Основной контейнер
         main_container = tk.Frame(self.canvas, bg=self.theme["bg_primary"])
         main_container.place(relx=0.5, rely=0.5, anchor="center", width=1000, height=800)
         
-        # Индикатор фокуса
         self.focus_indicator = tk.Canvas(main_container, width=400, height=400, 
                                         bg=self.theme["bg_primary"], highlightthickness=0)
         self.focus_indicator.pack(pady=(0, 30))
         
-        # Круг фокуса
         self.focus_circle = self.focus_indicator.create_oval(50, 50, 350, 350, 
                                                            outline=self.theme["accent_primary"], width=3)
         
-        # Целевой символ в центре
         self.symbol_label = tk.Label(
             self.focus_indicator,
             text=self.symbol,
@@ -125,7 +112,6 @@ class TargetWindow:
         )
         self.symbol_label.place(relx=0.5, rely=0.5, anchor="center")
         
-        # Анимированные круги вокруг символа
         self.animated_circles = []
         for i in range(3):
             circle = self.focus_indicator.create_oval(
@@ -135,7 +121,6 @@ class TargetWindow:
             )
             self.animated_circles.append(circle)
         
-        # Заголовок
         title_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         title_frame.pack(pady=(0, 40))
         
@@ -147,7 +132,6 @@ class TargetWindow:
             fg=self.theme["accent_primary"],
         ).pack()
         
-        # Инструкция
         instruction_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         instruction_frame.pack(pady=(0, 20))
         
@@ -159,7 +143,6 @@ class TargetWindow:
             fg=self.theme["text_primary"],
         ).pack()
         
-        # Подсказка действия
         action_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         action_frame.pack(pady=(0, 10))
         
@@ -171,7 +154,6 @@ class TargetWindow:
             fg=self.theme["accent_success"],
         ).pack()
         
-        # Индикатор готовности
         self.ready_indicator = tk.Label(
             action_frame,
             text="○",
@@ -181,7 +163,6 @@ class TargetWindow:
         )
         self.ready_indicator.pack(pady=(10, 0))
         
-        # Прогресс-бар
         progress_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         progress_frame.pack(pady=(30, 0))
         
@@ -202,13 +183,11 @@ class TargetWindow:
                 elif step % (len(self.animated_circles) * 2) == i * 2 + 1:
                     self.focus_indicator.itemconfig(circle, state="hidden")
             
-            # Пульсация готовности
             if step % 4 == 0:
                 self.ready_indicator.config(text="●", fg=self.theme["accent_success"])
             elif step % 4 == 2:
                 self.ready_indicator.config(text="○", fg=self.theme["text_tertiary"])
             
-            # Анимация прогресса
             progress = (step % 100) / 100
             self.progress_canvas.coords(self.progress_bar, 0, 0, 300 * progress, 6)
             
@@ -240,10 +219,8 @@ class TargetWindow:
         self.window.configure(bg=self.theme["bg_primary"])
         self.canvas.configure(bg=self.theme["bg_primary"])
         
-        # Перерисовываем фон
         self._create_background_effects()
         
-        # Обновляем кнопку темы
         self.theme_button.config(
             text="☀️" if self.theme_manager.is_dark_mode else "🌙",
             bg=self.theme["button_bg"],
@@ -251,10 +228,8 @@ class TargetWindow:
             highlightbackground=self.theme["border_primary"]
         )
         
-        # Пересоздаем контент
         self._create_content()
         
-        # Перезапускаем анимацию
         self._start_focus_animation()
 
     def _exit_program(self, event=None):
@@ -265,11 +240,9 @@ class TargetWindow:
 
     def _on_space_pressed(self, event=None):
         """Обработка нажатия пробела"""
-        # Анимация подтверждения
         self.ready_indicator.config(text="✓", fg=self.theme["accent_success"], font=("Segoe UI", 28))
         self.symbol_label.config(fg=self.theme["accent_success"])
         
-        # Заполняем прогресс-бар
         for i in range(10):
             progress = (i + 1) / 10
             self.window.after(i * 50, 

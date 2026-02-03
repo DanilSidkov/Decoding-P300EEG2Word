@@ -13,39 +13,29 @@ class WelcomeWindow:
         self.window = tk.Toplevel()
         self.window.title("BCI Speller - Добро пожаловать")
 
-        # Настраиваем окно на целевом мониторе
         if not setup_window_on_target_monitor(self.window):
-            # Если не удалось, используем обычный fullscreen
             self.window.attributes("-fullscreen", True)
         
-        # Холст для эффектов
         self.canvas = tk.Canvas(self.window, bg=self.theme["bg_primary"], highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         
-        # Привязка клавиш
         self.window.bind("<Escape>", self._exit_program)
         self.window.protocol("WM_DELETE_WINDOW", self._exit_program)
         self.window.bind("<space>", lambda e: self._on_continue())
 
-        # Создаем все виджеты
         self._create_ui()
 
     def _create_ui(self):
         """Создает весь интерфейс окна"""
-        # Очищаем холст
         self.canvas.delete("all")
         
-        # Устанавливаем фон окна
         self.window.configure(bg=self.theme["bg_primary"])
         self.canvas.configure(bg=self.theme["bg_primary"])
         
-        # Создаем фоновую сетку
         self._create_grid_background()
         
-        # Создаем кнопки управления (тема и выход)
         self._create_control_buttons()
         
-        # Создаем основной контент
         self._create_main_content()
 
     def _create_grid_background(self):
@@ -53,15 +43,12 @@ class WelcomeWindow:
         width = self.window.winfo_screenwidth()
         height = self.window.winfo_screenheight()
         
-        # Вертикальные линии
         for x in range(0, width, 50):
             self.canvas.create_line(x, 0, x, height, fill=self.theme["grid_lines"], width=1, dash=(2, 4))
         
-        # Горизонтальные линии
         for y in range(0, height, 50):
             self.canvas.create_line(0, y, width, y, fill=self.theme["grid_lines"], width=1, dash=(2, 4))
         
-        # Точки на пересечениях
         for x in range(25, width, 50):
             for y in range(25, height, 50):
                 self.canvas.create_oval(x-1, y-1, x+1, y+1, fill=self.theme["bg_tertiary"], outline="")
@@ -111,11 +98,9 @@ class WelcomeWindow:
 
     def _create_main_content(self):
         """Создает основной контент окна"""
-        # Основной контейнер
         main_container = tk.Frame(self.canvas, bg=self.theme["bg_primary"])
         main_container.place(relx=0.5, rely=0.5, anchor="center", width=800, height=600)
         
-        # Логотип/иконка
         logo_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         logo_frame.pack(pady=(0, 30))
         
@@ -127,7 +112,6 @@ class WelcomeWindow:
             fg=self.theme["accent_primary"],
         ).pack()
         
-        # Заголовок с градиентным эффектом
         title_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         title_frame.pack(pady=(0, 20))
         
@@ -139,7 +123,6 @@ class WelcomeWindow:
             fg=self.theme["text_primary"],
         ).pack()
         
-        # Подзаголовок с анимацией точки
         subtitle_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         subtitle_frame.pack(pady=(0, 40))
         
@@ -151,7 +134,6 @@ class WelcomeWindow:
             fg=self.theme["accent_primary"],
         ).pack()
         
-        # Описание
         desc_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         desc_frame.pack(pady=(0, 60))
         
@@ -165,8 +147,7 @@ class WelcomeWindow:
             justify="center",
         ).pack()
         
-        
-        # Стилизованная кнопка продолжения
+    
         button_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         button_frame.pack()
         
@@ -191,7 +172,6 @@ class WelcomeWindow:
         self.continue_button.pack()
         self._create_glow_effect(self.continue_button, self.theme["accent_primary"])
         
-        # Подсказка
         hint_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         hint_frame.pack(pady=(20, 0))
         
@@ -228,7 +208,6 @@ class WelcomeWindow:
         
     def _update_theme(self):
         """Обновление цветов согласно теме"""
-        # Полностью пересоздаем интерфейс с новой темой
         self._create_ui()
 
     def _exit_program(self, event=None):

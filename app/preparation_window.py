@@ -17,39 +17,29 @@ class PreparationWindow:
         self.window = tk.Toplevel()
         self.window.title("BCI Speller - Настройки")
         
-        # Настраиваем окно на целевом мониторе
         if not setup_window_on_target_monitor(self.window):
-            # Если не удалось, используем обычный fullscreen
             self.window.attributes("-fullscreen", True)
         
-        # Холст для эффектов
         self.canvas = tk.Canvas(self.window, bg=self.theme["bg_primary"], highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         
-        # Привязка клавиш
         self.window.bind("<Escape>", self._exit_program)
         self.window.protocol("WM_DELETE_WINDOW", self._exit_program)
 
-        # Создаем все виджеты
         self._create_ui()
 
     def _create_ui(self):
         """Создает весь интерфейс окна"""
-        # Очищаем холст
         self.canvas.delete("all")
         
-        # Устанавливаем фон окна
         self.window.configure(bg=self.theme["bg_primary"])
         self.canvas.configure(bg=self.theme["bg_primary"])
         
         self.window.update_idletasks()
-        # Создаем фоновые эффекты
         self._create_background_effects()
-        
-        # Создаем кнопки управления (тема и выход)
+    
         self._create_control_buttons()
         
-        # Создаем основной контент
         self._create_main_content()
 
     def _create_background_effects(self):
@@ -57,7 +47,6 @@ class PreparationWindow:
         width = self.window.winfo_screenwidth()
         height = self.window.winfo_screenheight()
         
-        # Сетка
         for x in range(0, width, 60):
             self.canvas.create_line(x, 0, x, height, 
                                    fill=self.theme["grid_lines"], width=1, dash=(3, 6))
@@ -68,7 +57,6 @@ class PreparationWindow:
 
     def _create_control_buttons(self):
         """Создает кнопки управления (тема и выход)"""
-        # Кнопка переключения темы
         self.theme_button = tk.Button(
             self.canvas,
             text="☀️" if self.theme_manager.is_dark_mode else "🌙",
@@ -90,7 +78,6 @@ class PreparationWindow:
         self.theme_button.place(x=self.window.winfo_screenwidth() - 60, y=20)
         self._create_glow_effect(self.theme_button, self.theme["accent_primary"])
 
-        # Кнопка выхода
         self.exit_button = tk.Button(
             self.canvas,
             text="✕",
@@ -111,13 +98,11 @@ class PreparationWindow:
 
     def _create_main_content(self):
         """Создает основной контент окна"""
-        # Основной контейнер
         screen_width = self.window.winfo_screenwidth()
         screen_height = self.window.winfo_screenheight()
         main_container = tk.Frame(self.canvas, bg=self.theme["bg_primary"])
         main_container.place(relx=0.5, rely=0.5, anchor="center", width=screen_width//2, height=int(screen_height*0.8))
 
-        # Заголовок
         tk.Label(
             main_container,
             text="НАСТРОЙКИ ЭКСПЕРИМЕНТА",
@@ -126,11 +111,9 @@ class PreparationWindow:
             fg=self.theme["text_primary"],
         ).pack(pady=(0, 30))
 
-        # Форма ввода
         form_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         form_frame.pack(pady=(0, 40), fill=tk.BOTH, expand=True)
 
-        # Поле ввода текста
         input_group = tk.Frame(form_frame, bg=self.theme["bg_primary"])
         input_group.pack(pady=(0, 20), fill=tk.X)
         
@@ -154,7 +137,6 @@ class PreparationWindow:
         self.text_entry.insert(0, "ПРИВЕТ")
         self.text_entry.pack(fill=tk.X, pady=(0, 10), ipady=8)
 
-        # Тип стимула
         stimulus_group = tk.Frame(form_frame, bg=self.theme["bg_primary"])
         stimulus_group.pack(pady=(0, 20), fill=tk.X)
         
@@ -166,14 +148,11 @@ class PreparationWindow:
             fg=self.theme["accent_primary"],
         ).pack(anchor="w", pady=(0, 5))
         
-        # Переменная для типа стимула
         self.stimulus_type = tk.StringVar(value="Мигание")
         
-        # Фрейм для радиокнопок
         radio_frame = tk.Frame(stimulus_group, bg=self.theme["bg_primary"])
         radio_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Радиокнопки для выбора типа стимула
         rb1 = tk.Radiobutton(
             radio_frame,
             text="Только мигание (стандартный SSVEP)",
@@ -219,7 +198,6 @@ class PreparationWindow:
         )
         rb3.pack(anchor="w", pady=(5, 0))
 
-        # Тип движения
         motion_group = tk.Frame(form_frame, bg=self.theme["bg_primary"])
         motion_group.pack(pady=(0, 20), fill=tk.X)
         
@@ -231,10 +209,8 @@ class PreparationWindow:
             fg=self.theme["accent_primary"],
         ).pack(anchor="w", pady=(0, 5))
         
-        # Переменная для типа движения
         self.motion_type = tk.StringVar(value="Дрожание")
         
-        # Выпадающий список для типа движения
         motion_options = ["Дрожание", "Колебание размера", "Направленное движение"]
         self.motion_combo = ttk.Combobox(
             motion_group,
@@ -246,7 +222,6 @@ class PreparationWindow:
         )
         self.motion_combo.pack(anchor="w", pady=(0, 5), ipady=6)
         
-        # Описание выбранного типа движения
         self.motion_desc = tk.Label(
             motion_group,
             text="Дрожание: буква слегка вибрирует на месте (1-2 пикселя)",
@@ -258,14 +233,11 @@ class PreparationWindow:
         )
         self.motion_desc.pack(anchor="w", pady=(5, 0))
         
-        # Привязываем изменение выбора типа движения
         self.motion_combo.bind("<<ComboboxSelected>>", self._update_motion_desc)
         
-        # Горизонтальный раздел для параметров
         params_frame = tk.Frame(form_frame, bg=self.theme["bg_primary"])
         params_frame.pack(fill=tk.X, pady=(0, 20))
         
-        # Длительность цикла
         duration_group = tk.Frame(params_frame, bg=self.theme["bg_primary"])
         duration_group.pack(side=tk.LEFT, padx=(0, 40))
         
@@ -290,7 +262,6 @@ class PreparationWindow:
         self.duration_entry.insert(0, "9")
         self.duration_entry.pack(ipady=6)
         
-        # Количество циклов
         cycles_group = tk.Frame(params_frame, bg=self.theme["bg_primary"])
         cycles_group.pack(side=tk.LEFT, padx=(0, 40))
         
@@ -315,7 +286,6 @@ class PreparationWindow:
         self.cycles_entry.insert(0, "10")
         self.cycles_entry.pack(ipady=6)
         
-        # Длина кода
         codelen_group = tk.Frame(params_frame, bg=self.theme["bg_primary"])
         codelen_group.pack(side=tk.LEFT)
         
@@ -340,7 +310,6 @@ class PreparationWindow:
         self.codelen_entry.insert(0, "9")
         self.codelen_entry.pack(ipady=6)
 
-        # Подсказка
         hint_label = tk.Label(
             form_frame,
             text="1 цикл = N (длина кода) интервалов стимуляции",
@@ -350,7 +319,6 @@ class PreparationWindow:
         )
         hint_label.pack(pady=(10, 0))
 
-        # Кнопка запуска
         button_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         button_frame.pack(pady=(10, 0))
         
@@ -375,7 +343,6 @@ class PreparationWindow:
         start_button.pack()
         self._create_glow_effect(start_button, self.theme["accent_success"])
 
-    # Обновим метод _update_motion_desc:
     def _update_motion_desc(self, event=None):
         """Обновляет описание выбранного типа движения"""
         motion_type = self.motion_type.get()
@@ -411,7 +378,6 @@ class PreparationWindow:
         
     def _update_theme(self):
         """Обновление цветов согласно теме"""
-        # Полностью пересоздаем интерфейс с новой темой
         self._create_ui()
 
     def _exit_program(self, event=None):

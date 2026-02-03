@@ -20,31 +20,24 @@ class ExperimentWindow:
         self.experiment_instance = experiment_instance
         self.theme = theme_manager.get_theme()
         self.target_text = target_text
-        self.stimulus_type = stimulus_type  # "Мигание", "Движение", "Комбинированный"
-        self.motion_type = motion_type  # "Дрожание", "Колебание размера"
+        self.stimulus_type = stimulus_type
+        self.motion_type = motion_type
 
         self.window = root_window
         self.window.title("BCI Speller - Эксперимент")
         
-        # Настраиваем окно на целевом мониторе
         if not setup_window_on_target_monitor(self.window):
-            # Если не удалось, используем обычный fullscreen
             self.window.attributes("-fullscreen", True)
         
-        # Холст для эффектов
         self.canvas = tk.Canvas(self.window, bg=self.theme["bg_primary"], highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         
-        # Добавить направления и амплитуды движения
-        self.directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']  # 8 направлений
-        self.amplitudes = ['small', 'large']  # 2 амплитуды
+        self.directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+        self.amplitudes = ['small', 'large']
         
-
-        # Привязка клавиш
         self.window.bind("<Escape>", self._exit_program)
         self.window.protocol("WM_DELETE_WINDOW", self._exit_program)
 
-        # Инициализация переменных эксперимента
         self.is_running = False
         self.current_interval = 0
         self.current_cycle = 0
@@ -58,13 +51,10 @@ class ExperimentWindow:
         self.screen_width = self.window.winfo_screenwidth()
         self.screen_height = self.window.winfo_screenheight()
 
-        # Словарь для хранения оригинальных положений и свойств символов
-        self.symbol_properties = {}  # key: label, value: dict with original properties
+        self.symbol_properties = {}
         
-        # Инициализация символов и паттернов
         self.setup_symbols()
         self.movement_patterns = self._generate_movement_patterns()
-        # Создаем все виджеты
         self._create_ui()
 
     def _generate_movement_patterns(self):
@@ -72,12 +62,9 @@ class ExperimentWindow:
         movement_patterns = {}
         
         for i, symbol in enumerate(self.symbols):
-            # Для каждого символа создаем список движений для каждого интервала
             symbol_movements = []
             for interval in range(self.experiment_instance.codelen):
-                # Случайное направление (0-7)
                 direction_idx = random.randint(0, len(self.directions) - 1)
-                # Случайная амплитуда (0-1)
                 amplitude_idx = random.randint(0, len(self.amplitudes) - 1)
                 
                 movement = {
@@ -117,22 +104,17 @@ class ExperimentWindow:
 
     def _create_ui(self):
         """Создает весь интерфейс окна"""
-        # Очищаем холст
         self.canvas.delete("all")
         
-        # Устанавливаем фон окна
         self.window.configure(bg=self.theme["bg_primary"])
         self.canvas.configure(bg=self.theme["bg_primary"])
         
-        # Создаем кнопки управления (тема и выход)
         self._create_control_buttons()
         
-        # Создаем основной контент
         self._create_main_content()
 
     def _create_control_buttons(self):
         """Создает кнопки управления (тема и выход)"""
-        # Кнопка переключения темы
         self.theme_button = tk.Button(
             self.canvas,
             text="☀️" if self.theme_manager.is_dark_mode else "🌙",
@@ -154,7 +136,6 @@ class ExperimentWindow:
         self.theme_button.place(x=self.screen_width - 60, y=20)
         self._create_glow_effect(self.theme_button, self.theme["accent_primary"])
 
-        # Кнопка выхода
         self.exit_button = tk.Button(
             self.canvas,
             text="✕",
@@ -175,7 +156,6 @@ class ExperimentWindow:
 
     def _create_main_content(self):
         """Создает основной контент главного окна"""
-        # Основной контейнер
         main_container = tk.PanedWindow(
             self.canvas,
             orient=tk.VERTICAL,
@@ -188,15 +168,12 @@ class ExperimentWindow:
         main_container.place(relx=0.5, rely=0.5, anchor="center", 
                            width=self.screen_width*0.9, height=self.screen_height*0.9)
 
-        # Верхняя панель (80%)
         top_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         main_container.add(top_frame, height=int(self.screen_height * 0.9 * 0.8))
 
-        # Панель информации
         info_frame = tk.Frame(top_frame, bg=self.theme["bg_primary"])
         info_frame.pack(fill=tk.X, padx=20, pady=(20, 10))
 
-        # Индикатор статуса
         status_group = tk.Frame(info_frame, bg=self.theme["bg_primary"])
         status_group.pack(side=tk.LEFT)
 
@@ -206,7 +183,6 @@ class ExperimentWindow:
         self.status_indicator = self.status_light.create_oval(2, 2, 18, 18, 
                                                             fill=self.theme["text_tertiary"], outline="")
 
-        # Обновляем текст статуса в зависимости от типа стимула
         stimulus_text = {
             "Мигание": "Мигание",
             "Движение": "Движение",
@@ -222,7 +198,6 @@ class ExperimentWindow:
         )
         self.status_label.pack(side=tk.LEFT)
 
-        # Индикатор стимуляции
         stimulus_group = tk.Frame(info_frame, bg=self.theme["bg_primary"])
         stimulus_group.pack(side=tk.RIGHT)
 
@@ -249,7 +224,6 @@ class ExperimentWindow:
             fg=self.theme["text_secondary"],
         ).pack(side=tk.LEFT)
 
-        # Панель прогресса
         progress_frame = tk.Frame(top_frame, bg=self.theme["bg_primary"])
         progress_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
 
@@ -262,7 +236,6 @@ class ExperimentWindow:
         )
         self.current_symbol_label.pack(anchor="w", pady=(0, 5))
 
-        # Прогресс-бар эксперимента
         progress_bar_frame = tk.Frame(progress_frame, bg=self.theme["bg_primary"])
         progress_bar_frame.pack(fill=tk.X, pady=(0, 10))
 
@@ -275,13 +248,11 @@ class ExperimentWindow:
         )
         self.experiment_progress.pack(side=tk.LEFT)
         
-        # Сетка символов
         grid_container = tk.Frame(top_frame, bg=self.theme["bg_primary"])
         grid_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
 
         self._create_symbol_grid(grid_container)
 
-        # Нижняя панель (20%)
         bottom_frame = tk.Frame(main_container, bg=self.theme["bg_primary"])
         main_container.add(bottom_frame, height=int(self.screen_height * 0.9 * 0.2))
 
@@ -295,11 +266,9 @@ class ExperimentWindow:
         )
         bottom_paned.pack(fill=tk.BOTH, expand=True)
 
-        # Левая панель (параметры)
         left_bottom_frame = tk.Frame(bottom_paned, bg=self.theme["bg_secondary"])
         bottom_paned.add(left_bottom_frame, width=int(self.screen_width * 0.9 * 0.4))
 
-        # Заголовок параметров
         tk.Label(
             left_bottom_frame,
             text="ПАРАМЕТРЫ ЭКСПЕРИМЕНТА",
@@ -308,7 +277,6 @@ class ExperimentWindow:
             fg=self.theme["accent_primary"],
         ).pack(anchor="w", padx=20, pady=(15, 10))
 
-        # Настройки
         settings_text = f"Тип: {self.stimulus_type} | "
         if self.stimulus_type != "Мигание":
             settings_text += f"Движение: {self.motion_type} | "
@@ -325,7 +293,6 @@ class ExperimentWindow:
         )
         self.settings_label.pack(anchor="w", padx=20, pady=(0, 5))
 
-        # Прогресс стимуляции
         self.progress_label = tk.Label(
             left_bottom_frame,
             text=f"Цикл: 0/{self.experiment_instance.num_cycles} | Интервал: 0/{self.experiment_instance.codelen}",
@@ -335,11 +302,9 @@ class ExperimentWindow:
         )
         self.progress_label.pack(anchor="w", padx=20, pady=(5, 5))
 
-        # Правая панель (результаты)
         right_bottom_frame = tk.Frame(bottom_paned, bg=self.theme["bg_secondary"])
         bottom_paned.add(right_bottom_frame, width=int(self.screen_width * 0.9 * 0.6))
 
-        # Заголовок результатов
         tk.Label(
             right_bottom_frame,
             text="РЕЗУЛЬТАТ ВВОДА",
@@ -348,11 +313,9 @@ class ExperimentWindow:
             fg=self.theme["accent_primary"],
         ).pack(anchor="w", padx=20, pady=(15, 10))
 
-        # Текстовое поле для результатов
         text_container = tk.Frame(right_bottom_frame, bg=self.theme["bg_secondary"])
         text_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 15))
 
-        # Кастомный скроллбар
         style = ttk.Style()
         style.configure("Results.Vertical.TScrollbar", 
                        background=self.theme["scrollbar_bg"],
@@ -388,7 +351,6 @@ class ExperimentWindow:
         self.text_display.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # Запускаем эксперимент
         self.window.after(100, self._show_next_target)
 
     def _create_symbol_grid(self, parent):
@@ -396,13 +358,11 @@ class ExperimentWindow:
         self.grid_frame = tk.Frame(parent, bg=self.theme["bg_primary"])
         self.grid_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
-        # Ждем обновления геометрии для получения реальных размеров
         self.grid_frame.update_idletasks()
         
         rows = 3
         cols = 12
         
-        # Вычисляем размеры ячеек
         cell_width = self.grid_frame.winfo_width() // cols
         cell_height = self.grid_frame.winfo_height() // rows
         
@@ -412,11 +372,9 @@ class ExperimentWindow:
             row = i // cols
             col = i % cols
             
-            # Вычисляем координаты центра ячейки
             x = col * cell_width + cell_width // 2
             y = row * cell_height + cell_height // 2
             
-            # СОЗДАЕМ ЛЕЙБЛЫ С СИМВОЛАМИ с использованием place
             label = tk.Label(
                 self.grid_frame,
                 text=symbol,
@@ -429,7 +387,6 @@ class ExperimentWindow:
             label.place(x=x, y=y, anchor="center")
             self.labels.append(label)
             
-            # Сохраняем оригинальные свойства символа
             self.symbol_properties[label] = {
                 'row': row,
                 'col': col,
@@ -466,7 +423,6 @@ class ExperimentWindow:
         
     def _update_theme(self):
         """Обновление цветов согласно теме"""
-        # Полностью пересоздаем интерфейс с новой темой
         self._create_ui()
 
     def _exit_program(self, event=None):
@@ -489,7 +445,6 @@ class ExperimentWindow:
                 motion_type=self.motion_type
             )
 
-            # Обновляем индикатор статуса
             self.status_light.itemconfig(self.status_indicator, fill="#f39c12")
             self.status_label.config(
                 text=f"Целевой символ: '{self.target_symbol}' ({self.current_target_index + 1}/{len(self.target_symbols)})",
@@ -521,7 +476,6 @@ class ExperimentWindow:
         )
         self.window.deiconify()
 
-        # Обновляем индикатор статуса
         self.status_light.itemconfig(self.status_indicator, fill=self.theme["accent_warning"])
         
         stimulus_text = {
@@ -577,7 +531,6 @@ class ExperimentWindow:
             text=f"Цикл: {self.current_cycle}/{self.experiment_instance.num_cycles} | Интервал: {self.current_interval}/{self.experiment_instance.codelen}"
         )
         
-        # Обновляем индикатор стимуляции
         if self.is_running:
             self.stimulus_indicator.config(text="●", fg=self.theme["accent_warning"])
         else:
@@ -586,11 +539,8 @@ class ExperimentWindow:
     def _apply_motion(self, label, active, interval):
         """Применяет движение к символу в зависимости от типа движения"""
         if not active:
-            # Сбрасываем движение для неактивных символов
             props = self.symbol_properties[label]
             
-            # ВАЖНО: Используем place с абсолютными координатами вместо grid
-            # Вычисляем абсолютные координаты для центрирования
             cell_width = self.grid_frame.winfo_width() // 12
             cell_height = self.grid_frame.winfo_height() // 3
             
@@ -601,12 +551,10 @@ class ExperimentWindow:
             label.config(font=("Segoe UI", props['font_size'], "bold"))
             return
         
-        # Получаем движение для текущего символа и интервала
         symbol = self.symbol_properties[label]['symbol']
         if symbol in self.movement_patterns and interval < len(self.movement_patterns[symbol]):
             movement = self.movement_patterns[symbol][interval]
         else:
-            # Если движения нет, используем значения по умолчанию
             movement = {
                 'direction': 'N',
                 'direction_idx': 0,
@@ -614,20 +562,16 @@ class ExperimentWindow:
                 'amplitude_idx': 0
             }
         
-        # Вычисляем фазу движения на основе интервала
         phase = (interval % 10) / 10.0 * 2 * math.pi
         
-        # Получаем исходные свойства
         props = self.symbol_properties[label]
         cell_width = self.grid_frame.winfo_width() // 12
         cell_height = self.grid_frame.winfo_height() // 3
         
-        # Базовые координаты (центр ячейки)
         base_x = props['col'] * cell_width + cell_width // 2
         base_y = props['row'] * cell_height + cell_height // 2
         
         if self.motion_type == "Дрожание":
-            # Дрожание: случайные смещения
             import random
             x_offset = random.randint(-4, 4)
             y_offset = random.randint(-4, 4)
@@ -635,28 +579,23 @@ class ExperimentWindow:
             label.place(x=base_x + x_offset, y=base_y + y_offset, anchor="center")
             
         elif self.motion_type == "Колебание размера":
-            # Колебание размера: синусоидальное изменение размера шрифта
-            scale = 0.5 + 0.5 * math.sin(phase * 2)  # От 0.8 до 1.2
+            scale = 0.5 + 0.5 * math.sin(phase * 2)
             font_size = int(props['font_size'] * scale)
             label.config(font=("Segoe UI", font_size, "bold"))
             label.place(x=base_x, y=base_y, anchor="center")
             
         elif self.motion_type == "Направленное движение":
-            # Направленное движение: в 8 направлениях с 2 амплитудами
             direction = movement['direction']
             amplitude = 4 if movement['amplitude'] == 'small' else 8
             
-            # Добавляем небольшую синусоидальную модуляцию для "колебания"
             oscillation = math.sin(phase * 4) * 0.5
             
-            # Вычисляем смещение в зависимости от направления
             dx, dy = self._get_direction_offset(direction, amplitude, oscillation)
             
             label.place(x=base_x + dx, y=base_y + dy, anchor="center")
 
     def _get_direction_offset(self, direction, amplitude, phase):
         """Возвращает смещение (dx, dy) для заданного направления"""
-        # Добавляем небольшую синусоидальную модуляцию для "колебания"
         oscillation = math.sin(phase * 4) * 0.3
         
         if direction == 'N':    # Север
@@ -682,7 +621,6 @@ class ExperimentWindow:
         else:
             return 0, 0
 
-    # В класс ExperimentWindow добавить:
     def get_movement_info_for_marker(self, symbol, interval):
         """Возвращает информацию о движении для маркера LSL"""
         if symbol in self.movement_patterns and interval < len(self.movement_patterns[symbol]):
@@ -716,7 +654,6 @@ class ExperimentWindow:
                 else -1
             )
 
-            # ВАЖНЫЙ МАРКЕР: НАЧАЛО ЦИКЛА
             self.experiment_instance.send_event_marker(
                 "CYCLE_START",
                 cycle=cycle + 1,
@@ -742,7 +679,6 @@ class ExperimentWindow:
 
                 states_str = "".join(str(s) for s in states)
 
-                # Получаем информацию о движении для целевого символа
                 target_movement = {}
                 if target_index != -1 and self.target_symbol in self.movement_patterns:
                     target_movement_info = self.movement_patterns[self.target_symbol][interval]
@@ -760,7 +696,6 @@ class ExperimentWindow:
                         'amplitude_idx': 0
                     }
                 target_movement = self.get_movement_info_for_marker(self.target_symbol, interval)
-                # ВАЖНЫЙ МАРКЕР: НАЧАЛО ИНТЕРВАЛА СТИМУЛЯЦИИ
                 self.experiment_instance.send_event_marker(
                     "STIMULUS_INTERVAL_START",
                     interval=interval + 1,
@@ -771,7 +706,6 @@ class ExperimentWindow:
                     target_state=self.patterns[target_index][interval] if target_index != -1 else 0,
                     stimulus_type=self.stimulus_type,
                     motion_type=self.motion_type,
-                    # Добавляем информацию о движении
                     movement_direction=target_movement['direction'],
                     movement_direction_idx=target_movement['direction_idx'],
                     movement_amplitude=target_movement['amplitude'],
@@ -779,13 +713,11 @@ class ExperimentWindow:
                     movement_description=target_movement['description']
                 )
 
-                # Применяем стимуляцию в зависимости от типа
                 for i, label in enumerate(self.labels):
                     if i < len(self.patterns):
                         active = self.patterns[i][interval] == 1
                         
                         if self.stimulus_type == "Мигание":
-                            # Только мигание
                             if active:
                                 if i == target_index:
                                     label.config(fg=self.theme["symbol_target_1"])
@@ -798,16 +730,13 @@ class ExperimentWindow:
                                     label.config(fg=self.theme["symbol_custom_0"])
                                     
                         elif self.stimulus_type == "Движение":
-                            # Только движение
                             self._apply_motion(label, active, interval)
-                            # Сохраняем цветовую схему
                             if i == target_index:
                                 label.config(fg=self.theme["symbol_target_1"] if active else self.theme["symbol_target_0"])
                             else:
                                 label.config(fg=self.theme["symbol_custom_1"] if active else self.theme["symbol_custom_0"])
                                 
                         elif self.stimulus_type == "Комбинированный":
-                            # Комбинированный: и мигание, и движение
                             if active:
                                 if i == target_index:
                                     label.config(fg=self.theme["symbol_target_1"])
@@ -820,25 +749,20 @@ class ExperimentWindow:
                                     label.config(fg=self.theme["symbol_custom_0"])
                             self._apply_motion(label, active, interval)
 
-                # Очень короткая задержка для визуального эффекта (20% от интервала)
                 time.sleep(self.experiment_instance.base_interval * 0.1)
 
-                # Фаза 2: Основное состояние
                 if self.stimulus_type == "Мигание" or self.stimulus_type == "Комбинированный":
                     for i, label in enumerate(self.labels):
                         if i < len(self.patterns):
                             active = self.patterns[i][interval] == 1
                             if active:
-                                # Символы с 1 становятся серыми после вспышки
                                 if i == target_index:
                                     label.config(fg=self.theme["symbol_target_0"])
                                 else:
                                     label.config(fg=self.theme["symbol_custom_0"])
 
-                # Оставшаяся часть интервала
                 time.sleep(self.experiment_instance.base_interval * 0.9)
 
-                # Сбрасываем движение в конце интервала
                 if self.stimulus_type != "Мигание":
                     for i, label in enumerate(self.labels):
                         if i < len(self.patterns):
@@ -846,7 +770,6 @@ class ExperimentWindow:
                             if active:
                                 self._apply_motion(label, False, interval)
 
-            # ВАЖНЫЙ МАРКЕР: КОНЕЦ ЦИКЛА
             self.experiment_instance.send_event_marker(
                 "CYCLE_END",
                 cycle=cycle + 1,
@@ -868,9 +791,7 @@ class ExperimentWindow:
 
         self._update_progress_display()
 
-        # Сбрасываем все свойства символов
         for label in self.labels:
-            # Сбрасываем движение и возвращаем в исходное положение
             props = self.symbol_properties[label]
             label.place(x=props['base_x'], y=props['base_y'], anchor="center")
             label.config(
@@ -881,7 +802,6 @@ class ExperimentWindow:
 
         self.output_text += self.target_symbol
 
-        # ВАЖНЫЙ МАРКЕР: СИМВОЛ ЗАВЕРШЕН
         self.experiment_instance.send_event_marker(
             "SYMBOL_FINISHED",
             symbol=self.target_symbol,
@@ -891,7 +811,6 @@ class ExperimentWindow:
             motion_type=self.motion_type
         )
         
-        # Обновляем индикатор статуса
         self.status_light.itemconfig(self.status_indicator, fill=self.theme["accent_success"])
         self.status_label.config(
             text=f"Символ '{self.target_symbol}' добавлен",
@@ -908,7 +827,6 @@ class ExperimentWindow:
 
     def _finish_experiment(self):
         """Завершает эксперимент"""
-        # ВАЖНЫЙ МАРКЕР: ЭКСПЕРИМЕНТ ЗАВЕРШЕН
         self.experiment_instance.send_event_marker(
             "EXPERIMENT_END",
             final_text=self.output_text,
@@ -917,28 +835,23 @@ class ExperimentWindow:
             motion_type=self.motion_type
         )
         
-        # Обновляем индикатор статуса
         self.status_light.itemconfig(self.status_indicator, fill=self.theme["accent_success"])
         self.status_label.config(text="Эксперимент завершен!", fg=self.theme["accent_success"])
         self.progress_label.config(text="Завершено", fg=self.theme["accent_success"])
 
-        # Стилизованное сообщение о завершении
         result_window = tk.Toplevel(self.window)
         result_window.title("Эксперимент завершен")
         result_window.configure(bg=self.theme["bg_primary"])
         result_window.geometry("600x450")
         result_window.resizable(False, False)
         
-        # Центрируем окно
         x = (self.screen_width - 600) // 2
         y = (self.screen_height - 450) // 2
         result_window.geometry(f"600x450+{x}+{y}")
         
-        # Содержимое
         canvas = tk.Canvas(result_window, bg=self.theme["bg_primary"], highlightthickness=0)
         canvas.pack(fill=tk.BOTH, expand=True)
         
-        # Иконка успеха
         tk.Label(
             canvas,
             text="✓",
@@ -947,7 +860,6 @@ class ExperimentWindow:
             fg=self.theme["accent_success"],
         ).place(relx=0.5, rely=0.25, anchor="center")
         
-        # Заголовок
         tk.Label(
             canvas,
             text="ЭКСПЕРИМЕНТ ЗАВЕРШЁН",
@@ -956,7 +868,6 @@ class ExperimentWindow:
             fg=self.theme["text_primary"],
         ).place(relx=0.5, rely=0.4, anchor="center")
         
-        # Результат
         tk.Label(
             canvas,
             text=f"Введённый текст: {self.output_text}",
@@ -965,7 +876,6 @@ class ExperimentWindow:
             fg=self.theme["accent_primary"],
         ).place(relx=0.5, rely=0.5, anchor="center")
         
-        # Параметры
         params_text = f"Тип стимула: {self.stimulus_type}\n"
         if self.stimulus_type != "Мигание":
             params_text += f"Тип движения: {self.motion_type}\n"
@@ -980,7 +890,6 @@ class ExperimentWindow:
             justify="center"
         ).place(relx=0.5, rely=0.65, anchor="center")
         
-        # Кнопка закрытия
         close_button = tk.Button(
             canvas,
             text="ЗАКРЫТЬ",
