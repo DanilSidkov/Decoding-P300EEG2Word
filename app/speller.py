@@ -8,6 +8,7 @@ from pylsl import StreamInfo, StreamOutlet
 from app.get_logger import setup_logger
 from app.theme import ThemeManager
 from monitor_config import setup_window_on_target_monitor
+from app.lsl_file_logger import LSLFileLogger
 
 class SSVEPSpellerExperiment:
     def __init__(self, root):
@@ -48,6 +49,7 @@ class SSVEPSpellerExperiment:
         self.outlet = StreamOutlet(info)
         
         self.current_window = None
+        self.lsl_file_logger = LSLFileLogger()
 
     def send_event_marker(self, event_type, **kwargs):
         """Отправка маркера события через LSL с поддержкой движения"""
@@ -71,6 +73,7 @@ class SSVEPSpellerExperiment:
         marker_string = f"{event_type} - {formatted_kwargs}"
         self.outlet.push_sample([marker_string])
         self.logger.info(f"Событие: {event_type} {formatted_kwargs}")
+        self.lsl_file_logger.log(marker_string)
 
     def start(self):
         """Запускает последовательность окон"""
@@ -152,6 +155,7 @@ class SSVEPSpellerExperiment:
     def _exit_program(self, event=None):
         """Закрытие программы"""
         self.logger.info("Программа завершена пользователем")
+        self.lsl_file_logger.stop()
         if messagebox.askyesno("Выход", "Вы уверены, что хотите выйти?"):
             if self.current_window:
                 self.current_window.window.destroy()
