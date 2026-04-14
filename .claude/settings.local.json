@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3)",
+      "Bash(python3 -c ':*)",
+      "Bash(grep -o \"\\\\.edf\\\\|\\\\.mat\\\\|loadmat\\\\|read\" notebooks/*.ipynb)",
+      "Bash(python -m src.models.run_training --edf data/raw/NeoRec_2026-03-30_11-01-10.edf --log data/raw/logs_2026-03-30_11-00-12.txt --settings BCI_P300/settings.json --channels core)",
+      "Bash(conda run:*)",
+      "Bash(\"C:\\\\Users\\\\user\\\\.local\\\\share\\\\mamba\\\\envs\\\\Neuro\\\\python.exe\" -m src.models.run_training --edf data/raw/NeoRec_2026-03-30_11-01-10.edf --log data/raw/logs_2026-03-30_11-00-12.txt --settings BCI_P300/settings.json --channels core)",
+      "Bash(python -c \"from src.features.p300_dataset import P300BinaryDataset, split_by_trials, prepare_binary_data; from src.models.train_model import train_model; from src.prediction.letter_predictor import LetterPredictor; print\\('All imports OK'\\)\")",
+      "Bash(pip install:*)",
+      "Bash(python -m pip install numpy torch mne scikit-learn)",
+      "Bash(python -m py_compile src/features/p300_dataset.py)",
+      "Bash(python -m py_compile src/models/train_model.py)",
+      "Bash(python -m py_compile src/prediction/letter_predictor.py)",
+      "Bash(python -m py_compile src/config.py)",
+      "Bash(python -m py_compile src/inference/eeg_buffer.py src/inference/lsl_streams.py src/inference/online_preprocessor.py src/inference/letter_aggregator.py src/inference/realtime_inference.py src/inference/run_inference.py BCI_P300/experiment_online.py)",
+      "Bash(python -c ':*)"
+    ]
+  }
+}

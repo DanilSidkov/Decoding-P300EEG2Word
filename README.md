@@ -1,61 +1,32 @@
-Decoding-P300EEG2Word
-==============================
-
-Создание алгоритма пословесного декодирования в нейроинтерфейсе на основе потенциала P300
-
-## Сборка окружения
-```bash
-micromamba create -n Neuro -f env.yaml
-micromamba activate Neuro
-pdm install
-```
-
-Project Organization
-------------
-
-    ├── README.md          <- The top-level README for developers using this project.
-    ├── data
-    │   ├── external       <- Data from third party sources.
-    │   ├── interim        <- Intermediate data that has been transformed.
-    │   ├── processed      <- The final, canonical data sets for modeling.
-    │   └── raw            <- The original, immutable data dump.
-    │
-    ├── logs               <- Logs
-    │
-    ├── models             <- Trained and serialized models, model predictions, or model summaries
-    │
-    ├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
-    │                         the creator's initials, and a short `-` delimited description, e.g.
-    │                         `1.0-jqp-initial-data-exploration`.
-    │
-    ├── references         <- Data dictionaries, manuals, and all other explanatory materials.
-    │
-    ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
-    │   └── figures        <- Generated graphics and figures to be used in reporting
-    │
-    ├── pyproject.toml     <- The requirements file for reproducing the analysis environment
-    │
-    ├── repo_name          <- Source code for use in this project.
-    │   ├── __init__.py    <- Makes src a Python module
-    │   │
-    │   ├── data           <- Scripts to download or generate data
-    │   │   └── make_dataset.py
-    │   │
-    │   ├── features       <- Scripts to turn raw data into features for modeling
-    │   │   └── build_features.py
-    │   │
-    │   ├── models         <- Scripts to train models and then use trained models to make
-    │   │   │                 predictions
-    │   │   ├── predict_model.py
-    │   │   └── train_model.py
-    │   │
-    │   ├── visualization  <- Scripts to create exploratory and results oriented visualizations
-    │   │   └── visualize.py
-    │   │
-    │   └── utils          <- Universal scripts
-    │       └── logger.py
-    │
-    └── tox.ini            <- tox file with settings for running tox; see tox.readthedocs.io
+# терминал 1 — инференс
+python -m src.inference.run_inference --model models/p300_model.pth \
+    --average-last 5 --log reports/online_trials.json
+# терминал 2 — стимулятор (после "READY")
+python BCI_P300/experiment_online.py
 
 
---------
+1. NeoRec 1.6 — запустить, подключить усилитель NVX136, убедиться что идёт сигнал, и включить LSL broadcast (в настройках NeoRec галочка/чекбокс про LSL — после этого в сети появляется EEG-поток).
+
+2. Терминал 1 — инференс:
+
+python -m src.inference.run_inference --model models/p300_model.pth --average-last 5 --log reports/online_trials.json
+
+Дождись в логе:
+
+EEG stream: name='NeoRec', sfreq=..., n_ch=34 — поток найден
+Модель загружена: 18 каналов, 201 точка — чекпоинт ок
+Получено N сэмплов. Готов. — буфер прогрет, отправлен READY
+Инференс запущен. Ctrl+C для остановки.
+Если на этом шаге ошибка "LSL EEG-поток не найден" — значит NeoRec LSL broadcast не включён, возвращайся к шагу 1.
+
+3. Терминал 2 — стимулятор:
+
+python BCI_P300/experiment_online.py
+
+Стимулятор сам увидит READY от инференса (ждёт до 15с), затем начнёт показывать буквы из sentence.
+
+Важные нюансы порядка:
+
+Если запустить стимулятор раньше инференса, он прождёт wait_inference_ready_sec (15с), не дождётся READY и всё равно начнёт — но первые trial'ы уйдут "в никуда". Лучше так не делать.
+Инференс должен запуститься после NeoRec, иначе resolve_eeg_stream сразу упадёт.
+Остановка: Ctrl+C в терминале 1 (инференс сохранит JSON-лог), Esc или Space во время trial в окне стимулятора

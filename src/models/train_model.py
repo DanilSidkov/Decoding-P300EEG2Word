@@ -6,26 +6,26 @@ import torch.nn.functional as F
 class NeuroInformedEarlyStopping:
     """Ранняя остановка с учетом метрик BCI"""
 
-    def __init__(self, patience=5, min_epochs=5):
+    def __init__(self, patience=20, min_epochs=20):
         self.patience = patience
         self.min_epochs = min_epochs
-        self.best_f1 = 0
+        self.best_score = 0
         self.epochs_no_improve = 0
         self.early_stop = False
 
-    def __call__(self, current_f1, epoch, train_loss, val_loss):
-        if current_f1 > self.best_f1:
-            self.best_f1 = current_f1
+    def __call__(self, current_score, epoch, train_loss, val_loss):
+        if current_score > self.best_score:
+            self.best_score = current_score
             self.epochs_no_improve = 0
         else:
             self.epochs_no_improve += 1
-            
+
         if epoch < self.min_epochs:
             return
-            
+
         if self.epochs_no_improve >= self.patience:
             self.early_stop = True
-            print(f"Early stopping triggered. Best F1: {self.best_f1:.4f}")
+            print(f"Early stopping triggered. Best BalAcc: {self.best_score:.4f}")
 
 class FocalLoss(nn.Module):
     def __init__(self, weight=None, gamma=2.0, reduction='mean'):
@@ -128,11 +128,11 @@ def train_model(
         betas=(0.9, 0.999)
     )
     
-    best_f1 = 0.0
+    best_bal_acc = 0.0
     best_model_state = None
     
     accumulation_steps = 4
-    steps_per_epoch = (len(train_loader) + accumulation_steps - 1) // accumulation_steps
+    steps_per_epoch = len(train_loader) // accumulation_steps
     if len(train_loader) % accumulation_steps != 0:
         steps_per_epoch += 1
 
@@ -140,7 +140,7 @@ def train_model(
 
     scheduler = optim.lr_scheduler.OneCycleLR(
         optimizer,
-        max_lr=0.01,
+        max_lr=0.003,
         total_steps=total_steps,
         pct_start=0.1,
         div_factor=10.0,
@@ -162,7 +162,7 @@ def train_model(
         "grad_norm": [],
     }
 
-    early_stopping = NeuroInformedEarlyStopping(patience=5, min_epochs=10)
+    early_stopping = NeuroInformedEarlyStopping(patience=20, min_epochs=20)
 
     for epoch in range(num_epochs):
         model.train()
@@ -234,13 +234,14 @@ def train_model(
         avg_val_loss = val_loss / len(val_loader)
 
         current_f1 = metrics["f1_target"]
-        if current_f1 > best_f1:
-            best_f1 = current_f1
+        current_bal_acc = metrics["accuracy"]
+        if current_bal_acc > best_bal_acc:
+            best_bal_acc = current_bal_acc
             best_model_state = {
                 'epoch': epoch,
                 'model_state_dict': model.state_dict().copy(),
                 'optimizer_state_dict': optimizer.state_dict().copy(),
-                'f1': best_f1,
+                'bal_acc': best_bal_acc,
                 'metrics': metrics.copy()
             }
 
@@ -264,19 +265,20 @@ def train_model(
             print(f"Target F1: {current_f1:.4f} | Precision: {metrics['precision_target']:.4f} | Recall: {metrics['recall_target']:.4f}")
             print(f"ROC AUC: {metrics['auc_roc']:.4f} | Specificity: {metrics['specificity']:.4f}")
             print(f"LR: {optimizer.param_groups[0]['lr']:.2e} | Grad Norm: {history['grad_norm'][-1]:.4f}")
-            print(f"Best F1: {best_f1:.4f}")
+            print(f"Best BalAcc: {best_bal_acc:.4f}")
             print("-" * 60)
 
-        early_stopping(current_f1, epoch, train_loss, val_loss)
+        early_stopping(current_bal_acc, epoch, train_loss, val_loss)
         if early_stopping.early_stop:
             print(f"Early stopping at epoch {epoch+1}")
             break
 
     if best_model_state is not None:
         model.load_state_dict(best_model_state['model_state_dict'])
-        print(f"\nLoaded best model from epoch {best_model_state['epoch'] + 1} with F1: {best_f1:.4f}")
+        print(f"\nLoaded best model from epoch {best_model_state['epoch'] + 1} "
+              f"with BalAcc: {best_bal_acc:.4f}")
 
-    history["best_f1"] = best_f1
+    history["best_bal_acc"] = best_bal_acc
     history["best_epoch"] = best_model_state['epoch'] if best_model_state else epoch
     
     return history
@@ -303,11 +305,7 @@ def test_model(
 
     """
     from sklearn.metrics import (
-        accuracy_score,
-        confusion_matrix,
-        precision_recall_fscore_support,
-        roc_auc_score,
-        balanced_accuracy_score
+        balanced_accuracy_score,
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
@@ -336,3 +334,42 @@ def test_model(
     print(f"Test BAccuracy: {bac}%")
 
     return all_predictions, all_labels, accuracy
+
+
+def predict_probabilities(
+    model: nn.Module,
+    data_loader: DataLoader,
+) -> tuple[list[float], list[int]]:
+    """Возвращает P(target) для каждой эпохи.
+
+    Используется для letter-level предсказания:
+    буква с наибольшим средним P(target) = предсказанная.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Обученная модель
+    data_loader : torch.utils.data.DataLoader
+        DataLoader данных
+
+    Returns
+    -------
+    tuple[list[float], list[int]]
+        (probabilities P(target), true labels)
+
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.eval()
+    all_probs: list[float] = []
+    all_labels: list[int] = []
+
+    with torch.no_grad():
+        for signals, labels in data_loader:
+            signals = signals.to(device)
+            outputs = model(signals)
+            probs = F.softmax(outputs, dim=1)[:, 1]
+
+            all_probs.extend(probs.cpu().numpy().tolist())
+            all_labels.extend(labels.squeeze().numpy().tolist())
+
+    return all_probs, all_labels
