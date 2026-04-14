@@ -56,7 +56,7 @@ def resolve_eeg_stream(
 
     Сначала пытается найти по имени, затем любой с type='EEG'.
     """
-    # сначала по имени
+    # сначала точное совпадение по имени
     for name in preferred_names:
         streams = resolve_byprop("name", name, timeout=1.0)
         if streams:
@@ -70,15 +70,34 @@ def resolve_eeg_stream(
             )
             return inlet, meta
 
-    # затем по типу
+    # по типу EEG
     streams = resolve_byprop("type", "EEG", timeout=timeout)
+
+    # фолбэк: все доступные потоки, ищем по подстроке в name/type
+    all_streams = resolve_streams(wait_time=2.0)
     if not streams:
-        # в крайнем случае — любые потоки
-        streams = resolve_streams(wait_time=timeout)
-        streams = [s for s in streams if s.type().lower() == "eeg"]
+        candidates = []
+        for s in all_streams:
+            n = (s.name() or "").lower()
+            t = (s.type() or "").lower()
+            if (
+                t == "eeg"
+                or "eeg" in t
+                or "neorec" in n
+                or "nvx" in n
+                or any(p.lower() in n for p in preferred_names)
+            ):
+                candidates.append(s)
+        streams = candidates
+
     if not streams:
+        visible = ", ".join(
+            f"{s.name()!r}(type={s.type()!r}, ch={s.channel_count()})"
+            for s in all_streams
+        ) or "<нет потоков>"
         raise RuntimeError(
-            "LSL EEG-поток не найден. Запущен ли NeoRec с LSL broadcast?"
+            "LSL EEG-поток не найден. Запущен ли NeoRec с LSL broadcast?\n"
+            f"Видимые LSL-потоки: {visible}"
         )
     info = streams[0]
     inlet = StreamInlet(info, max_buflen=60)
