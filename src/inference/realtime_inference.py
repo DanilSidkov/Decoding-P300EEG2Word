@@ -44,6 +44,9 @@ class InferenceConfig:
     device: str | None = None
     eeg_unit_scale: float = 1e-6
     log_path: str | None = None
+    # Если NeoRec не передаёт имена каналов в LSL-метаданных,
+    # можно задать их вручную в том же порядке, в котором идут данные.
+    lsl_channel_names: list[str] | None = None
 
 
 @dataclass
@@ -94,6 +97,19 @@ class RealtimeInference:
             f"[RT] EEG stream: name='{self.eeg_meta.name}', "
             f"sfreq={self.eeg_meta.sfreq}, n_ch={self.eeg_meta.n_channels}"
         )
+        # Если пользователь передал имена каналов явно — используем их
+        if config.lsl_channel_names is not None:
+            if len(config.lsl_channel_names) != self.eeg_meta.n_channels:
+                raise ValueError(
+                    f"--lsl-channel-names: передано {len(config.lsl_channel_names)} имён, "
+                    f"но поток содержит {self.eeg_meta.n_channels} каналов."
+                )
+            self.eeg_meta = self.eeg_meta.__class__(
+                name=self.eeg_meta.name,
+                n_channels=self.eeg_meta.n_channels,
+                sfreq=self.eeg_meta.sfreq,
+                channel_names=config.lsl_channel_names,
+            )
         print(f"[RT] LSL каналы: {self.eeg_meta.channel_names}")
 
         self.buffer = EEGRingBuffer(

@@ -1,0 +1,52 @@
+# Конфигурация онлайн-инференса P300.
+# Значения здесь — дефолты. CLI-аргументы их перекрывают.
+
+model_path: models/p300_model.pth
+marker_stream_name: annotations
+feedback_stream_name: p300_feedback
+buffer_capacity_sec: 10.0
+filter_pad_sec: 1.0
+average_last: null      # null = усреднять все репетиции
+device: null            # null = авто (cuda если есть, иначе cpu)
+eeg_unit_scale: 1.0e-6  # 1e-6 если поток в мкВ; 1.0 если уже в В
+log_path: null
+
+# Порядок каналов в LSL-потоке NeoRec.
+# Нужен, когда усилитель не передаёт имена каналов в метаданных LSL.
+# Укажите каналы строго в том порядке, в котором они идут в потоке.
+# Если null — имена берутся из LSL-метаданных.
+lsl_channel_names:
+  - Fp1
+  - Fp2
+  - F7
+  - F3
+  - Fz
+  - F4
+  - F8
+  - Ft9
+  - Fc5
+  - Fc1
+  - Fc2
+  - Fc6
+  - Ft10
+  - T7
+  - C3
+  - Cz
+  - C4
+  - T8
+  - Tp9
+  - Cp5
+  - Cp1
+  - Cp2
+  - Cp6
+  - Tp10
+  - P7
+  - P3
+  - Pz
+  - P4
+  - P8
+  - O1
+  - Oz
+  - O2
+  - P1
+  - P2

@@ -51,14 +51,19 @@ def _extract_channel_names(info) -> list[str]:
 def resolve_eeg_stream(
     timeout: float = 10.0,
     preferred_names: tuple[str, ...] = ("NeoRec", "NVX136", "EEG"),
+    min_channels: int = 2,
 ) -> tuple[StreamInlet, EEGStreamMeta]:
     """Находит EEG-поток через LSL.
 
     Сначала пытается найти по имени, затем любой с type='EEG'.
     """
+    def _is_eeg_like(s) -> bool:
+        return s.channel_count() >= min_channels and s.nominal_srate() > 0.0
+
     # сначала точное совпадение по имени
     for name in preferred_names:
         streams = resolve_byprop("name", name, timeout=1.0)
+        streams = [s for s in streams if _is_eeg_like(s)]
         if streams:
             info = streams[0]
             inlet = StreamInlet(info, max_buflen=60)
@@ -72,12 +77,15 @@ def resolve_eeg_stream(
 
     # по типу EEG
     streams = resolve_byprop("type", "EEG", timeout=timeout)
+    streams = [s for s in streams if _is_eeg_like(s)]
 
     # фолбэк: все доступные потоки, ищем по подстроке в name/type
     all_streams = resolve_streams(wait_time=2.0)
     if not streams:
         candidates = []
         for s in all_streams:
+            if not _is_eeg_like(s):
+                continue
             n = (s.name() or "").lower()
             t = (s.type() or "").lower()
             if (
