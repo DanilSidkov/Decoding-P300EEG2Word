@@ -24,5 +24,8 @@
     "n_repetitions": 10,
     "feedback_duration_ms": 2000,
     "wait_feedback_timeout_ms": 5000,
-    "wait_inference_ready_sec": 15
+    "wait_inference_ready_sec": 15,
+    "highlight_hit_prob": 0.5,
+    "highlight_hit_threshold": 7,
+    "highlight_max_hits": 10
 }

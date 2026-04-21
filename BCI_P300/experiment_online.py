@@ -8,8 +8,10 @@
     "E"           — конец trial (когда каждая буква стартовала
                     n_repetitions раз)
 * Дополнительный LSL-инлет 'p300_feedback' слушает ответ модели:
-    "P:<letter>"  — предсказанная таргет-буква → подсветить
-    "READY"       — инференс готов
+    "P:<letter>"           — предсказанная таргет-буква → подсветить
+    "EPOCH:<letter>:<p>"   — online-счётчик hits (P>порог) для inline
+                             красной рамки, растущей по интенсивности
+    "READY"                — инференс готов
 * После trial показывается фидбэк: предсказанная буква подсвечивается
   зелёным (совпала с таргетом) или красным (не совпала) в течение
   feedback_duration_ms.
@@ -49,6 +51,18 @@ class OnlineExperiment:
         self.wait_inference_ready_sec = float(
             data_config.get("wait_inference_ready_sec", 15.0),
         )
+        # параметры inline-подсветки по online-фидбэку
+        self.highlight_hit_prob = float(
+            data_config.get("highlight_hit_prob", 0.5),
+        )
+        self.highlight_hit_threshold = int(
+            data_config.get("highlight_hit_threshold", 7),
+        )
+        self.highlight_max_hits = int(
+            data_config.get("highlight_max_hits", 10),
+        )
+        # буфер для предсказаний, пойманных во время trial
+        self._pending_prediction: str | None = None
 
     # ------------------------------------------------------------------
 
@@ -246,12 +260,12 @@ class OnlineExperiment:
             ),
         )
 
-    def _render_rect(self, char, color):
+    def _render_rect(self, char, color, width: int = 6):
         params = self.cells[char]
         j = params["id"] // self.n_cols
         i = params["id"] % self.n_cols
         rect = pygame.Rect(i * self.w, j * self.h, self.w, self.h)
-        pygame.draw.rect(self.screen, color, rect, width=6)
+        pygame.draw.rect(self.screen, color, rect, width=width)
 
     def _show_target_cue(self, target_letter: str, duration_ms: int = 1500):
         """Показывает таргет-букву (статично, с синей рамкой) перед trial."""
@@ -281,6 +295,19 @@ class OnlineExperiment:
         # 1) показать cue
         self._show_target_cue(target_letter)
 
+        # сброс online-счётчиков подсветки на новый trial
+        self._hits: dict[str, int] = {c: 0 for c in self.alphabet}
+        self._pending_prediction = None
+        # вычитать залежавшиеся сэмплы из feedback-потока
+        if self.feedback_inlet is not None:
+            try:
+                while True:
+                    s, _ = self.feedback_inlet.pull_sample(timeout=0.0)
+                    if not s:
+                        break
+            except Exception:
+                pass
+
         # 2) маркер начала trial
         self.outlet.push_sample([f"T:{target_letter}"], local_clock())
 
@@ -303,6 +330,9 @@ class OnlineExperiment:
                     if event.key == pygame.K_SPACE:
                         # SPACE во время trial = аварийный выход trial
                         self.running = False
+
+            # забираем свежий online-фидбэк от инференса
+            self._poll_feedback_during_trial()
 
             self.screen.fill(self.background)
 
@@ -358,6 +388,9 @@ class OnlineExperiment:
 
                 self._render_letter(char, params, dx=dx, dy=dy)
 
+            # inline-подсветка hits-букв (поверх движущихся букв)
+            self._render_hit_highlights()
+
             pygame.display.flip()
 
             # условие конца trial: каждая буква стартовала ≥ n_repetitions раз
@@ -387,6 +420,11 @@ class OnlineExperiment:
     # ------------------------------------------------------------------
 
     def _wait_for_prediction(self) -> str | None:
+        # мог уже прийти во время trial (race: E обработан до выхода из цикла)
+        if self._pending_prediction is not None:
+            pred = self._pending_prediction
+            self._pending_prediction = None
+            return pred
         if self.feedback_inlet is None:
             return None
         deadline_ms = pygame.time.get_ticks() + self.wait_feedback_timeout_ms
@@ -406,11 +444,58 @@ class OnlineExperiment:
                 payload = sample[0]
                 if payload.startswith("P:"):
                     return payload[2:]
+                # EPOCH-фидбэк, прилетевший после E, игнорируем
             # держим экран белым (пустое межтрайловое состояние)
             self.screen.fill(self.background)
             pygame.display.flip()
             self.clock.tick(30)
         return None
+
+    # ------------------------------------------------------------------
+
+    def _poll_feedback_during_trial(self) -> None:
+        """Неблокирующее чтение LSL feedback-потока в главном цикле trial.
+
+        Парсит EPOCH:<letter>:<prob> — инкрементит hits-счётчик.
+        Если случайно пришёл P:<letter> (race с "E") — буферизуем его
+        для _wait_for_prediction.
+        """
+        if self.feedback_inlet is None:
+            return
+        try:
+            while True:
+                sample, _ = self.feedback_inlet.pull_sample(timeout=0.0)
+                if not sample or not isinstance(sample[0], str):
+                    break
+                payload = sample[0]
+                if payload.startswith("EPOCH:"):
+                    parts = payload[6:].rsplit(":", 1)
+                    if len(parts) != 2:
+                        continue
+                    letter, prob_s = parts
+                    try:
+                        prob = float(prob_s)
+                    except ValueError:
+                        continue
+                    if (prob > self.highlight_hit_prob
+                            and letter in self._hits):
+                        self._hits[letter] += 1
+                elif payload.startswith("P:"):
+                    self._pending_prediction = payload[2:]
+        except Exception:
+            pass
+
+    def _render_hit_highlights(self) -> None:
+        """Рисует растущие красные рамки вокруг букв с hits >= threshold."""
+        thr = self.highlight_hit_threshold
+        span = max(1, self.highlight_max_hits - thr + 1)
+        for char, n in self._hits.items():
+            if n < thr:
+                continue
+            t = min(1.0, (n - thr + 1) / span)
+            thickness = 4 + int(8 * t)
+            red = 150 + int(105 * t)
+            self._render_rect(char, (red, 0, 0), width=thickness)
 
     def _show_feedback(
         self, predicted: str, target: str, color: tuple[int, int, int],

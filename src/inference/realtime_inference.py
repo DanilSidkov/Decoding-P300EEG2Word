@@ -6,8 +6,10 @@
     "E"               — конец trial, требуется предсказание
 
 Протокол маркеров (outbound, в стимулятор):
-    "P:<letter>"      — предсказанная таргет-буква
-    "READY"           — инференс поднят, можно запускать стимуляцию
+    "P:<letter>"           — предсказанная таргет-буква (в конце trial)
+    "EPOCH:<letter>:<p>"   — online-фидбэк: после каждой обработанной эпохи,
+                             p = P(target) в [0,1], 4 знака после точки
+    "READY"                — инференс поднят, можно запускать стимуляцию
 """
 
 from __future__ import annotations
@@ -358,6 +360,8 @@ class RealtimeInference:
         print(
             f"[RT]  · '{pe.letter}' #{cnt}: P(target)={p_target:.3f}"
         )
+        # online-фидбэк в стимулятор для inline-подсветки
+        self.feedback_out.push_sample([f"EPOCH:{pe.letter}:{p_target:.4f}"])
 
     # ------------------------------------------------------------------
     # завершение trial
