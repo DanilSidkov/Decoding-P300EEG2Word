@@ -180,25 +180,37 @@ class EEGReader(threading.Thread):
     def stop(self) -> None:
         self._stop_event.set()
 
+    # Если timestamps EEG отличаются от local_clock больше чем на этот порог,
+    # считаем что поток использует другую временну́ю базу (напр. Unix time).
+    _TS_DISCREPANCY_THRESHOLD = 1000.0  # секунд
+
     def _refresh_tc(self) -> None:
         """Обновляет кэш time_correction.
 
-        Сначала пробуем штатный протокол LSL. Если падает — fallback:
-        offset ≈ local_clock() - последний_сырой_timestamp.
-        После первой неудачи протокола больше не пробуем его (не тратим
-        2 сек на таймаут каждые 5 сек).
+        Алгоритм:
+        1. Вычисляем fallback-оценку: offset = local_clock() - last_raw_ts.
+        2. Пробуем штатный протокол LSL.
+        3. Если протокол и fallback расходятся >1000 с — NeoRec использует
+           Unix-время в данных, но local_clock в time_correction-сервисе.
+           В этом случае используем fallback (он точен).
+        4. Если протокол недоступен — используем fallback.
+        5. Если оба дают схожий результат — предпочитаем протокол.
         """
         now = time.monotonic()
         if now - self._tc_last_update < self.tc_interval_sec:
             return
-        # 1) Штатный протокол — только если он работал ранее, либо это
-        #    самый первый вызов (_tc_last_update < 0)
+
+        # Всегда считаем fallback-оценку (если есть данные)
+        fallback: float | None = None
+        if self._last_raw_ts is not None:
+            fallback = local_clock() - self._last_raw_ts
+
+        # Пробуем протокол (только если ранее работал или первый вызов)
+        protocol: float | None = None
         if self._tc_from_protocol or self._tc_last_update < 0:
             try:
-                self._tc_offset = self.inlet.time_correction(timeout=2.0)
-                self._tc_last_update = now
+                protocol = self.inlet.time_correction(timeout=1.0)
                 self._tc_from_protocol = True
-                return
             except Exception as e:
                 if self._tc_last_update < 0:
                     print(
@@ -206,10 +218,28 @@ class EEGReader(threading.Thread):
                         f"использую оценку по timestamps."
                     )
                 self._tc_from_protocol = False
-        # 2) Fallback: по сырому timestamp
-        if self._last_raw_ts is not None:
-            self._tc_offset = local_clock() - self._last_raw_ts
-            self._tc_last_update = now
+
+        # Выбор итогового значения
+        if protocol is not None and fallback is not None:
+            discrepancy = abs(protocol - fallback)
+            if discrepancy > self._TS_DISCREPANCY_THRESHOLD:
+                # NeoRec отдаёт данные с Unix-временем, но time_correction
+                # измеряет uptime. Доверяем fallback.
+                if self._tc_offset == 0.0:  # первый раз — объяснить
+                    print(
+                        f"[EEGReader] Обнаружено: EEG-поток использует Unix-время. "
+                        f"protocol={protocol:+.1f}s, fallback={fallback:+.1f}s. "
+                        f"Использую fallback."
+                    )
+                self._tc_offset = fallback
+            else:
+                self._tc_offset = protocol
+        elif protocol is not None:
+            self._tc_offset = protocol
+        elif fallback is not None:
+            self._tc_offset = fallback
+
+        self._tc_last_update = now
 
     def run(self) -> None:
         while not self._stop_event.is_set():
