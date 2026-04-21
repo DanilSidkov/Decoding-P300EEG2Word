@@ -148,26 +148,48 @@ def make_feedback_outlet(
 
 
 class EEGReader(threading.Thread):
-    """Фоновый поток: читает сэмплы из EEG-инлета в ring buffer."""
+    """Фоновый поток: читает сэмплы из EEG-инлета в ring buffer.
+
+    Если EEG-поток идёт с другого компьютера, его timestamps могут быть
+    в чужих «часах». inlet.time_correction() возвращает смещение, которое
+    нужно прибавить, чтобы перевести удалённое время в локальное LSL-время.
+    Коррекция пересчитывается раз в `tc_interval_sec` секунд.
+    """
 
     def __init__(
         self,
         inlet: StreamInlet,
         buffer: EEGRingBuffer,
         chunk_timeout: float = 0.2,
+        tc_interval_sec: float = 5.0,
     ) -> None:
         super().__init__(daemon=True)
         self.inlet = inlet
         self.buffer = buffer
         self.chunk_timeout = chunk_timeout
+        self.tc_interval_sec = tc_interval_sec
         self._stop_event = threading.Event()
         self.n_samples_total = 0
+        self._tc_offset: float = 0.0       # time_correction кэш
+        self._tc_last_update: float = -1.0
 
     def stop(self) -> None:
         self._stop_event.set()
 
+    def _refresh_tc(self) -> None:
+        """Обновляет кэш time_correction (не чаще раз в tc_interval_sec)."""
+        now = time.monotonic()
+        if now - self._tc_last_update < self.tc_interval_sec:
+            return
+        try:
+            self._tc_offset = self.inlet.time_correction(timeout=0.5)
+            self._tc_last_update = now
+        except Exception as e:
+            print(f"[EEGReader] time_correction error: {e}")
+
     def run(self) -> None:
         while not self._stop_event.is_set():
+            self._refresh_tc()
             try:
                 chunk, timestamps = self.inlet.pull_chunk(
                     timeout=self.chunk_timeout,
@@ -179,7 +201,7 @@ class EEGReader(threading.Thread):
                 continue
             if chunk:
                 samples = np.asarray(chunk, dtype=np.float32)
-                ts = np.asarray(timestamps, dtype=np.float64)
+                ts = np.asarray(timestamps, dtype=np.float64) + self._tc_offset
                 self.buffer.push_chunk(samples, ts)
                 self.n_samples_total += samples.shape[0]
 

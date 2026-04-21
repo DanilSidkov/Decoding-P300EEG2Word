@@ -135,6 +135,10 @@ class RealtimeInference:
             config.marker_stream_name,
         )
         print("[RT] Marker stream найден.")
+        # Кэш time_correction для marker inlet (стимулятор может быть на другом ПК)
+        self._marker_tc: float = 0.0
+        self._marker_tc_last: float = -1.0
+        self._marker_tc_interval: float = 5.0
         self.feedback_out = make_feedback_outlet(
             name=config.feedback_stream_name,
         )
@@ -156,6 +160,16 @@ class RealtimeInference:
     # ------------------------------------------------------------------
 
     def start(self) -> None:
+        # Принудительно вычисляем time_correction до старта потоков,
+        # чтобы первые же эпохи получили верные timestamps.
+        print("[RT] Синхронизация LSL-часов...")
+        self.eeg_reader._refresh_tc()
+        self._refresh_marker_tc()
+        print(
+            f"[RT] Clock offsets — EEG: {self.eeg_reader._tc_offset:+.3f}s, "
+            f"Markers: {self._marker_tc:+.3f}s"
+        )
+
         self.eeg_reader.start()
         # прогрев буфера
         print("[RT] Прогрев EEG буфера (2с)...")
@@ -191,12 +205,25 @@ class RealtimeInference:
     # главный цикл
     # ------------------------------------------------------------------
 
+    def _refresh_marker_tc(self) -> None:
+        """Обновляет time_correction для marker inlet (не чаще раз в интервал)."""
+        now = time.monotonic()
+        if now - self._marker_tc_last < self._marker_tc_interval:
+            return
+        try:
+            self._marker_tc = self.marker_inlet.time_correction(timeout=0.5)
+            self._marker_tc_last = now
+        except Exception as e:
+            print(f"[RT] marker time_correction error: {e}")
+
     def _worker_loop(self) -> None:
         from pylsl import local_clock
 
         min_wait_sec = self.preproc.tmax + self.preproc.filter_pad_sec + 0.05
 
         while not self._stop_event.is_set():
+            self._refresh_marker_tc()
+
             # 1. читаем маркеры неблокирующе
             try:
                 sample, ts = self.marker_inlet.pull_sample(timeout=0.05)
@@ -205,7 +232,8 @@ class RealtimeInference:
                 sample, ts = None, None
 
             if sample is not None and sample[0]:
-                self._handle_marker(sample[0], float(ts))
+                corrected_ts = float(ts) + self._marker_tc
+                self._handle_marker(sample[0], corrected_ts)
 
             # 2. обрабатываем pending эпохи, у которых подоспел хвост EEG
             now = local_clock()
