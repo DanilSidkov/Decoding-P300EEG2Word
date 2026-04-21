@@ -139,6 +139,8 @@ class RealtimeInference:
         self._marker_tc: float = 0.0
         self._marker_tc_last: float = -1.0
         self._marker_tc_interval: float = 5.0
+        self._marker_tc_from_protocol: bool = False
+        self._marker_last_raw_ts: float | None = None
         self.feedback_out = make_feedback_outlet(
             name=config.feedback_stream_name,
         )
@@ -160,22 +162,20 @@ class RealtimeInference:
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        # Принудительно вычисляем time_correction до старта потоков,
-        # чтобы первые же эпохи получили верные timestamps.
-        print("[RT] Синхронизация LSL-часов...")
-        self.eeg_reader._refresh_tc()
-        self._refresh_marker_tc()
-        print(
-            f"[RT] Clock offsets — EEG: {self.eeg_reader._tc_offset:+.3f}s, "
-            f"Markers: {self._marker_tc:+.3f}s"
-        )
-
         self.eeg_reader.start()
-        # прогрев буфера
+        # прогрев буфера — за это время EEGReader успеет принять первый
+        # чанк и вычислить time_correction (либо через протокол, либо fallback)
         print("[RT] Прогрев EEG буфера (2с)...")
         time.sleep(2.0)
         print(
             f"[RT] Получено {self.eeg_reader.n_samples_total} сэмплов. Готов."
+        )
+        # Показываем вычисленное смещение для EEG
+        # (для маркеров оно будет посчитано при получении первого маркера)
+        tc_mode = "протокол" if self.eeg_reader._tc_from_protocol else "fallback"
+        print(
+            f"[RT] EEG clock offset: {self.eeg_reader._tc_offset:+.3f}s "
+            f"({tc_mode})"
         )
         self.feedback_out.push_sample(["READY"])
         self._worker_thread = threading.Thread(
@@ -206,15 +206,29 @@ class RealtimeInference:
     # ------------------------------------------------------------------
 
     def _refresh_marker_tc(self) -> None:
-        """Обновляет time_correction для marker inlet (не чаще раз в интервал)."""
+        """Обновляет time_correction для marker inlet (см. EEGReader._refresh_tc)."""
         now = time.monotonic()
         if now - self._marker_tc_last < self._marker_tc_interval:
             return
-        try:
-            self._marker_tc = self.marker_inlet.time_correction(timeout=0.5)
+        # 1) штатный протокол — только если работал ранее или первый вызов
+        if self._marker_tc_from_protocol or self._marker_tc_last < 0:
+            try:
+                self._marker_tc = self.marker_inlet.time_correction(timeout=2.0)
+                self._marker_tc_last = now
+                self._marker_tc_from_protocol = True
+                return
+            except Exception as e:
+                if self._marker_tc_last < 0:
+                    print(
+                        f"[RT] marker time_correction недоступен ({e}); "
+                        f"использую оценку по timestamps."
+                    )
+                self._marker_tc_from_protocol = False
+        # 2) fallback
+        if self._marker_last_raw_ts is not None:
+            from pylsl import local_clock
+            self._marker_tc = local_clock() - self._marker_last_raw_ts
             self._marker_tc_last = now
-        except Exception as e:
-            print(f"[RT] marker time_correction error: {e}")
 
     def _worker_loop(self) -> None:
         from pylsl import local_clock
@@ -232,6 +246,10 @@ class RealtimeInference:
                 sample, ts = None, None
 
             if sample is not None and sample[0]:
+                # Запоминаем сырой ts и сразу обновляем offset
+                # (важно для первого маркера — чтобы не ждать след. итерации)
+                self._marker_last_raw_ts = float(ts)
+                self._refresh_marker_tc()
                 corrected_ts = float(ts) + self._marker_tc
                 self._handle_marker(sample[0], corrected_ts)
 

@@ -150,10 +150,12 @@ def make_feedback_outlet(
 class EEGReader(threading.Thread):
     """Фоновый поток: читает сэмплы из EEG-инлета в ring buffer.
 
-    Если EEG-поток идёт с другого компьютера, его timestamps могут быть
-    в чужих «часах». inlet.time_correction() возвращает смещение, которое
-    нужно прибавить, чтобы перевести удалённое время в локальное LSL-время.
-    Коррекция пересчитывается раз в `tc_interval_sec` секунд.
+    Если EEG-поток идёт с другого компьютера, его timestamps в чужих часах.
+    Основной способ — inlet.time_correction() (UDP-протокол).
+    Если протокол не работает (блокирует firewall, ошибки multicast),
+    используется fallback: offset оценивается по последнему чанку как
+    `local_clock() - latest_remote_ts`. Погрешность = сетевая задержка
+    (обычно 1–10 мс), для P300-эпох 800 мс это несущественно.
     """
 
     def __init__(
@@ -170,26 +172,47 @@ class EEGReader(threading.Thread):
         self.tc_interval_sec = tc_interval_sec
         self._stop_event = threading.Event()
         self.n_samples_total = 0
-        self._tc_offset: float = 0.0       # time_correction кэш
+        self._tc_offset: float = 0.0
         self._tc_last_update: float = -1.0
+        self._tc_from_protocol: bool = False   # получен ли offset по протоколу
+        self._last_raw_ts: float | None = None  # сырой timestamp для fallback
 
     def stop(self) -> None:
         self._stop_event.set()
 
     def _refresh_tc(self) -> None:
-        """Обновляет кэш time_correction (не чаще раз в tc_interval_sec)."""
+        """Обновляет кэш time_correction.
+
+        Сначала пробуем штатный протокол LSL. Если падает — fallback:
+        offset ≈ local_clock() - последний_сырой_timestamp.
+        После первой неудачи протокола больше не пробуем его (не тратим
+        2 сек на таймаут каждые 5 сек).
+        """
         now = time.monotonic()
         if now - self._tc_last_update < self.tc_interval_sec:
             return
-        try:
-            self._tc_offset = self.inlet.time_correction(timeout=0.5)
+        # 1) Штатный протокол — только если он работал ранее, либо это
+        #    самый первый вызов (_tc_last_update < 0)
+        if self._tc_from_protocol or self._tc_last_update < 0:
+            try:
+                self._tc_offset = self.inlet.time_correction(timeout=2.0)
+                self._tc_last_update = now
+                self._tc_from_protocol = True
+                return
+            except Exception as e:
+                if self._tc_last_update < 0:
+                    print(
+                        f"[EEGReader] time_correction недоступен ({e}); "
+                        f"использую оценку по timestamps."
+                    )
+                self._tc_from_protocol = False
+        # 2) Fallback: по сырому timestamp
+        if self._last_raw_ts is not None:
+            self._tc_offset = local_clock() - self._last_raw_ts
             self._tc_last_update = now
-        except Exception as e:
-            print(f"[EEGReader] time_correction error: {e}")
 
     def run(self) -> None:
         while not self._stop_event.is_set():
-            self._refresh_tc()
             try:
                 chunk, timestamps = self.inlet.pull_chunk(
                     timeout=self.chunk_timeout,
@@ -201,9 +224,17 @@ class EEGReader(threading.Thread):
                 continue
             if chunk:
                 samples = np.asarray(chunk, dtype=np.float32)
-                ts = np.asarray(timestamps, dtype=np.float64) + self._tc_offset
+                raw_ts = np.asarray(timestamps, dtype=np.float64)
+                # Запоминаем последний сырой timestamp для fallback offset
+                self._last_raw_ts = float(raw_ts[-1])
+                # Обновляем offset (может использовать _last_raw_ts)
+                self._refresh_tc()
+                ts = raw_ts + self._tc_offset
                 self.buffer.push_chunk(samples, ts)
                 self.n_samples_total += samples.shape[0]
+            else:
+                # нет данных — всё равно пробуем обновить offset
+                self._refresh_tc()
 
 
 __all__ = [
