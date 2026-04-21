@@ -162,7 +162,7 @@ class EEGReader(threading.Thread):
         self,
         inlet: StreamInlet,
         buffer: EEGRingBuffer,
-        chunk_timeout: float = 0.2,
+        chunk_timeout: float = 0.05,
         tc_interval_sec: float = 5.0,
     ) -> None:
         super().__init__(daemon=True)

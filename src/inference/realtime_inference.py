@@ -299,7 +299,7 @@ class RealtimeInference:
                 t_marker
                 + self.preproc.tmax
                 + self.preproc.filter_pad_sec
-                + 0.15  # запас на сетевой джиттер и задержку буфера
+                + 0.25  # запас: chunk_timeout(0.05) + сетевой джиттер
             )
             self._pending.append(PendingEpoch(
                 letter=letter, t_marker=t_marker, ready_at=ready_at,
